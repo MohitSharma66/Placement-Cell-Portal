@@ -2,7 +2,53 @@ const express = require('express');
 const auth = require('../middleware/auth');
 const User = require('../models/User');
 const Resume = require('../models/Resume');
+const { getAuthUrl, setToken, uploadResumeToDrive, loadToken } = require('../utils/driveOAuth');
+const multer = require('multer');
 const router = express.Router();
+
+// Configure multer for file uploads
+const upload = multer({
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB limit
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed'), false);
+    }
+  },
+});
+
+// OAuth 2.0 Authentication Routes
+router.get('/auth/google', (req, res) => {
+  getAuthUrl().then(url => res.json({ authUrl: url })).catch(err => {
+    console.error('Error in getAuthUrl:', err);
+    res.status(500).send('Internal server error: ' + err.message);
+  });
+});
+
+router.get('/auth/callback', async (req, res) => {
+  if (!req.query.code) {
+    return res.status(400).json({ msg: 'No authorization code provided' });
+  }
+  try {
+    await setToken(req.query.code);
+    res.json({ msg: 'Authentication successful!' });
+  } catch (err) {
+    console.error('Authentication error:', err);
+    res.status(500).json({ msg: 'Authentication failed: ' + err.message });
+  }
+});
+
+// Check authentication status
+router.get('/auth/status', async (req, res) => {
+  await loadToken(); // Load and refresh token
+  const { oauth2Client } = require('../utils/driveOAuth');
+  if (oauth2Client.credentials && oauth2Client.credentials.access_token) {
+    res.json({ authenticated: true });
+  } else {
+    res.json({ authenticated: false });
+  }
+});
 
 // Get profile
 router.get('/profile', auth, async (req, res) => {
@@ -16,11 +62,7 @@ router.put('/profile', auth, async (req, res) => {
 
   try {
     const { cgpa, branch } = req.body;
-    const user = await User.findByIdAndUpdate(
-      req.user.id,
-      { cgpa: parseFloat(cgpa), branch },
-      { new: true }
-    ).select('-password');
+    const user = await User.findByIdAndUpdate(req.user.id, { cgpa: parseFloat(cgpa), branch }, { new: true }).select('-password');
     res.json(user);
   } catch (err) {
     console.error(err);
@@ -29,13 +71,26 @@ router.put('/profile', auth, async (req, res) => {
 });
 
 // Upload resume
-router.post('/resumes', auth, async (req, res) => {
+router.post('/resumes', auth, upload.single('resume'), async (req, res) => {
   if (req.user.role !== 'student') return res.status(403).json({ msg: 'Access denied' });
 
   try {
-    const { googleDriveLink, title } = req.body;
-    if (!googleDriveLink || !title) return res.status(400).json({ msg: 'Missing required fields' });
-    const resume = new Resume({ studentId: req.user.id, googleDriveLink, title });
+    const { title } = req.body;
+    if (!req.file || !title) return res.status(400).json({ msg: 'Resume file and title are required' });
+
+    // Upload to Google Drive with OAuth
+    const user = await User.findById(req.user.id);
+    const uploadResult = await uploadResumeToDrive(req.file.buffer, req.file.originalname, req.user.id, user.name);
+    if (!uploadResult.success) {
+      return res.status(500).json({ msg: 'Failed to upload resume to Google Drive' });
+    }
+
+    // Save resume metadata to MongoDB
+    const resume = new Resume({
+      studentId: req.user.id,
+      googleDriveLink: uploadResult.link,
+      title,
+    });
     await resume.save();
     res.json(resume);
   } catch (err) {
