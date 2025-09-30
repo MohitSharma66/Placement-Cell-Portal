@@ -1,3 +1,4 @@
+// models/User.js
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
@@ -9,6 +10,9 @@ const userSchema = new mongoose.Schema({
   cgpa: { type: Number, min: 0, max: 10 },
   branch: { type: String, trim: true },
   company: { type: String, trim: true },
+  // New fields for student profile
+  tenthScore: { type: Number, min: 0, max: 100 },
+  twelfthScore: { type: Number, min: 0, max: 100 },
   createdAt: { type: Date, default: Date.now },
 });
 

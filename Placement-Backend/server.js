@@ -4,6 +4,7 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 
 dotenv.config();
+console.log('Credentials path:', process.env.GOOGLE_SHEETS_CREDENTIALS_PATH);
 
 const app = express();
 app.use(cors());

@@ -1,13 +1,50 @@
+// models/Job.js
 const mongoose = require('mongoose');
 
 const jobSchema = new mongoose.Schema({
-  recruiterId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  title: { type: String, required: true, trim: true },
-  description: { type: String, required: true, trim: true },
-  minCgpa: { type: Number, min: 0, max: 10 },
-  branch: { type: String, trim: true },
-  requirements: { type: [String], default: [] },
-  postedAt: { type: Date, default: Date.now },
+  recruiterId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+  },
+  title: {
+    type: String,
+    required: true,
+  },
+  description: {
+    type: String,
+    required: true,
+  },
+  minCgpa: {
+    type: Number,
+  },
+  branch: {
+    type: String,
+  },
+  requirements: {
+    type: [String],
+  },
+  postedAt: {
+    type: Date,
+    default: Date.now,
+  },
+  // Add custom questions field
+  customQuestions: [{
+    question: {
+      type: String,
+      required: true
+    },
+    type: {
+      type: String,
+      enum: ['text', 'textarea', 'select'],
+      default: 'text'
+    },
+    options: [String], // For select type
+    required: {
+      type: Boolean,
+      default: false
+    }
+  }]
 });
 
 module.exports = mongoose.model('Job', jobSchema);

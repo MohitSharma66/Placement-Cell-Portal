@@ -63,7 +63,7 @@ async function uploadResumeToDrive(fileBuffer, fileName, studentId, studentName)
 
   const fileMetadata = {
     name: `${studentName}_${studentId}_${fileName}`,
-    parents: ['root'], // Upload to root; adjust if using a specific folder
+    parents: [process.env.GOOGLE_DRIVE_FOLDER_ID || 'root'], // Use folder ID or root as fallback
   };
 
   const bufferStream = new Readable();

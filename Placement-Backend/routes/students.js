@@ -1,3 +1,4 @@
+// routes/students.js
 const express = require('express');
 const auth = require('../middleware/auth');
 const User = require('../models/User');
@@ -41,7 +42,7 @@ router.get('/auth/callback', async (req, res) => {
 
 // Check authentication status
 router.get('/auth/status', async (req, res) => {
-  await loadToken(); // Load and refresh token
+  await loadToken();
   const { oauth2Client } = require('../utils/driveOAuth');
   if (oauth2Client.credentials && oauth2Client.credentials.access_token) {
     res.json({ authenticated: true });
@@ -56,13 +57,22 @@ router.get('/profile', auth, async (req, res) => {
   res.json(req.user);
 });
 
-// Update profile
+// Update profile - UPDATED WITH NEW FIELDS
 router.put('/profile', auth, async (req, res) => {
   if (req.user.role !== 'student') return res.status(403).json({ msg: 'Access denied' });
 
   try {
-    const { cgpa, branch } = req.body;
-    const user = await User.findByIdAndUpdate(req.user.id, { cgpa: parseFloat(cgpa), branch }, { new: true }).select('-password');
+    const { cgpa, branch, tenthScore, twelfthScore } = req.body;
+    const user = await User.findByIdAndUpdate(
+      req.user.id, 
+      { 
+        cgpa: parseFloat(cgpa), 
+        branch,
+        tenthScore: parseFloat(tenthScore),
+        twelfthScore: parseFloat(twelfthScore)
+      }, 
+      { new: true }
+    ).select('-password');
     res.json(user);
   } catch (err) {
     console.error(err);
@@ -78,14 +88,12 @@ router.post('/resumes', auth, upload.single('resume'), async (req, res) => {
     const { title } = req.body;
     if (!req.file || !title) return res.status(400).json({ msg: 'Resume file and title are required' });
 
-    // Upload to Google Drive with OAuth
     const user = await User.findById(req.user.id);
     const uploadResult = await uploadResumeToDrive(req.file.buffer, req.file.originalname, req.user.id, user.name);
     if (!uploadResult.success) {
       return res.status(500).json({ msg: 'Failed to upload resume to Google Drive' });
     }
 
-    // Save resume metadata to MongoDB
     const resume = new Resume({
       studentId: req.user.id,
       googleDriveLink: uploadResult.link,
