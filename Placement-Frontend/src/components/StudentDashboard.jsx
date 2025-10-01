@@ -11,6 +11,9 @@ const StudentDashboard = () => {
     tenthScore: '', 
     twelfthScore: '' 
   });
+  const [selectedResumeForJobs, setSelectedResumeForJobs] = useState('');
+  const [filteredJobs, setFilteredJobs] = useState([]);
+  const [jobsMessage, setJobsMessage] = useState('');
   const [resumes, setResumes] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [applications, setApplications] = useState([]);
@@ -46,6 +49,21 @@ const StudentDashboard = () => {
       console.error('Authentication check failed:', err);
     }
   };
+
+  const loadFilteredJobs = async (resumeId) => {
+  try {
+    const res = await axios.get(`http://localhost:5000/api/applications/jobs/${resumeId}`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+    });
+    setFilteredJobs(res.data.jobs);
+    setJobsMessage(res.data.message);
+    setError('');
+  } catch (err) {
+    setError('Failed to load jobs');
+    // Fallback: load all jobs
+    fetchJobs();
+  }
+};
 
   const handleAuth = async () => {
     try {
@@ -176,10 +194,15 @@ const StudentDashboard = () => {
   };
 
   const handleApplyClick = (jobId) => {
-    setSelectedJob(jobId);
-    fetchJobDetails(jobId);
-    setShowPopup(true);
-  };
+  setSelectedJob(jobId);
+  fetchJobDetails(jobId);
+  setShowPopup(true);
+  
+  // Pre-select the resume if one is selected for job filtering
+  if (selectedResumeForJobs) {
+    setSelectedResume(selectedResumeForJobs);
+  }
+};
 
   const updateCustomAnswer = (question, answer) => {
     setCustomAnswers(prev => ({
@@ -342,37 +365,83 @@ const StudentDashboard = () => {
           </section>
         );
       case 'jobs':
-        return (
-          <section className="card mb-8">
-            <h2 className="text-xl font-semibold mb-4 text-gray-800">Job Opportunities</h2>
-            {jobs.length === 0 ? (
-              <p className="text-gray-500">No job opportunities available.</p>
-            ) : (
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {jobs.map((job) => (
-                  <div key={job._id} className="card hover:shadow-md transition-shadow">
-                    <h3 className="font-bold text-lg text-gray-800 mb-1">{job.title}</h3>
-                    <p className="text-sm text-gray-500 mb-1">Company: {job.recruiterId?.company || 'N/A'}</p>
-                    <p className="text-sm text-gray-500 mb-1">Min CGPA: {job.minCgpa || 'N/A'}</p>
-                    <p className="text-sm text-gray-500 mb-1">Branch: {job.branch || 'Any'}</p>
-                    {job.customQuestions && job.customQuestions.length > 0 && (
-                      <p className="text-sm text-primary mb-1">
-                        {job.customQuestions.length} custom question{job.customQuestions.length > 1 ? 's' : ''}
-                      </p>
-                    )}
-                    <p className="text-sm text-gray-500">Posted: {new Date(job.postedAt).toLocaleDateString()}</p>
-                    <div className="mt-4">
-                      <button
-                        onClick={() => handleApplyClick(job._id)}
-                        className="btn-primary"
-                      >
-                        Apply
-                      </button>
-                    </div>
-                  </div>
-                ))}
+  return (
+    <section className="card mb-8">
+      <h2 className="text-xl font-semibold mb-4 text-gray-800">Job Opportunities</h2>
+      
+      {/* Resume Selection for Job Filtering */}
+      <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Select Resume to See Matching Jobs
+        </label>
+        <div className="flex gap-4">
+          <select
+            value={selectedResumeForJobs}
+            onChange={(e) => {
+              setSelectedResumeForJobs(e.target.value);
+              if (e.target.value) {
+                loadFilteredJobs(e.target.value);
+              } else {
+                setFilteredJobs([]);
+                setJobsMessage('');
+              }
+            }}
+            className="select flex-1"
+          >
+            <option value="">Select a resume to filter jobs...</option>
+            {resumes.map((r) => (
+              <option key={r._id} value={r._id}>{r.title}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => {
+              setSelectedResumeForJobs('');
+              setFilteredJobs([]);
+              setJobsMessage('');
+              fetchJobs();
+            }}
+            className="btn-secondary"
+          >
+            Show All Jobs
+          </button>
+        </div>
+        {jobsMessage && (
+          <p className="text-sm text-blue-600 mt-2">{jobsMessage}</p>
+        )}
+      </div>
+
+      {/* Jobs Display */}
+      {filteredJobs.length === 0 && selectedResumeForJobs ? (
+        <div className="text-center py-8">
+          <p className="text-gray-500">No matching jobs found for your selected resume.</p>
+          <p className="text-sm text-gray-400 mt-2">Try selecting a different resume or view all jobs.</p>
+        </div>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {(selectedResumeForJobs ? filteredJobs : jobs).map((job) => (
+            <div key={job._id} className="card hover:shadow-md transition-shadow">
+              <h3 className="font-bold text-lg text-gray-800 mb-1">{job.title}</h3>
+              <p className="text-sm text-gray-500 mb-1">Company: {job.recruiterId?.company || 'N/A'}</p>
+              <p className="text-sm text-gray-500 mb-1">Min CGPA: {job.minCgpa || 'N/A'}</p>
+              <p className="text-sm text-gray-500 mb-1">Branch: {job.branch || 'Any'}</p>
+              {job.suitableRoles && job.suitableRoles.length > 0 && (
+                <p className="text-sm text-primary mb-1">
+                  Suitable for: {job.suitableRoles.join(', ')}
+                </p>
+              )}
+              <p className="text-sm text-gray-500">Posted: {new Date(job.postedAt).toLocaleDateString()}</p>
+              <div className="mt-4">
+                <button
+                  onClick={() => handleApplyClick(job._id)}
+                  className="btn-primary"
+                >
+                  Apply
+                </button>
               </div>
-            )}
+            </div>
+          ))}
+        </div>
+      )}
             {showPopup && selectedJob && selectedJobDetails && (
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                 <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">

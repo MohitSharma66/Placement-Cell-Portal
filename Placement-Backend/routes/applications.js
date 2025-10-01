@@ -6,9 +6,79 @@ const Job = require('../models/Job');
 const User = require('../models/User');
 const Resume = require('../models/Resume');
 const { addApplicationToSheet, updateApplicationStatusInSheet } = require('../utils/googleSheets');
+const { getAnalysisFromDrive } = require('../utils/driveOAuth'); // ADD THIS IMPORT
 const router = express.Router();
 const dotenv = require('dotenv');
 dotenv.config();
+
+// Helper function to filter jobs based on resume analysis
+async function getMatchingJobs(resumeId, allJobs) {
+  try {
+    // Try to get analysis from database first (stored in resume)
+    const resume = await Resume.findById(resumeId);
+    
+    if (resume && resume.skillAnalysis && resume.skillAnalysis.bestRoles) {
+      const bestRoles = resume.skillAnalysis.bestRoles;
+      
+      return allJobs.filter(job => 
+        job.suitableRoles && job.suitableRoles.some(role => 
+          bestRoles.includes(role)
+        )
+      );
+    }
+    
+    // If no analysis in database, try to get from Drive
+    const analysis = await getAnalysisFromDrive(resumeId);
+    
+    if (analysis && analysis.bestRoles) {
+      return allJobs.filter(job => 
+        job.suitableRoles && job.suitableRoles.some(role => 
+          analysis.bestRoles.includes(role)
+        )
+      );
+    }
+    
+    // If no analysis available, return all jobs (fallback)
+    console.log(`No analysis found for resume ${resumeId}, showing all jobs`);
+    return allJobs;
+    
+  } catch (error) {
+    console.error('Error in job matching:', error);
+    // On error, return all jobs as fallback
+    return allJobs;
+  }
+}
+
+// Get jobs filtered by resume analysis - ADD THIS NEW ROUTE
+router.get('/jobs/:resumeId', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'student') return res.status(403).json({ msg: 'Access denied' });
+
+  try {
+    // Verify the resume belongs to the student
+    const resume = await Resume.findById(req.params.resumeId);
+    if (!resume || resume.studentId.toString() !== req.user.id) {
+      return res.status(404).json({ msg: 'Resume not found or not authorized' });
+    }
+
+    // Get all jobs
+    const allJobs = await Job.find().populate('recruiterId', 'company name').sort({ postedAt: -1 });
+    
+    // Filter jobs based on resume analysis
+    const matchingJobs = await getMatchingJobs(req.params.resumeId, allJobs);
+    
+    res.json({
+      jobs: matchingJobs,
+      totalJobs: allJobs.length,
+      matchingJobs: matchingJobs.length,
+      message: matchingJobs.length < allJobs.length ? 
+        `Showing ${matchingJobs.length} jobs that match your skills` : 
+        'Showing all available jobs'
+    });
+  } catch (err) {
+    console.error('Server error:', err);
+    res.status(500).json({ msg: 'Server error', error: err.message });
+  }
+});
 
 // Apply to a job - UPDATED WITH CUSTOM ANSWERS
 router.post('/', authMiddleware, async (req, res) => {
@@ -83,7 +153,7 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
-// ... rest of the routes remain similar but update the populate to include customAnswers
+// Get applications for a specific job (recruiter)
 router.get('/recruiters/:jobId', authMiddleware, async (req, res) => {
   if (req.user.role !== 'recruiter') return res.status(403).json({ msg: 'Access denied' });
 

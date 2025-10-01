@@ -6,6 +6,9 @@ const Resume = require('../models/Resume');
 const { getAuthUrl, setToken, uploadResumeToDrive, loadToken } = require('../utils/driveOAuth');
 const multer = require('multer');
 const router = express.Router();
+const ResumeAnalyzer = require('../utils/resumeAnalyzer');
+const PDFParser = require('../utils/pdfParser');
+const { saveAnalysisToDrive } = require('../utils/driveOAuth'); // ADD THIS
 
 // Configure multer for file uploads
 const upload = multer({
@@ -81,6 +84,7 @@ router.put('/profile', auth, async (req, res) => {
 });
 
 // Upload resume
+// Upload resume - UPDATED WITH RESUME ANALYSIS
 router.post('/resumes', auth, upload.single('resume'), async (req, res) => {
   if (req.user.role !== 'student') return res.status(403).json({ msg: 'Access denied' });
 
@@ -99,7 +103,33 @@ router.post('/resumes', auth, upload.single('resume'), async (req, res) => {
       googleDriveLink: uploadResult.link,
       title,
     });
+
     await resume.save();
+
+    // RESUME ANALYSIS - ADD THIS SECTION
+    try {
+      const pdfParser = new PDFParser();
+      const resumeAnalyzer = new ResumeAnalyzer();
+      
+      // Extract text from PDF
+      const resumeText = await pdfParser.extractText(req.file.buffer);
+      
+      // Analyze resume
+      const analysis = await resumeAnalyzer.analyze(resumeText);
+      
+      // Save analysis to Drive
+      await saveAnalysisToDrive(resume._id.toString(), analysis);
+      
+      // Also save analysis in database for quick access
+      resume.skillAnalysis = analysis;
+      await resume.save();
+      
+      console.log(`Resume analysis completed for: ${title}`);
+    } catch (analysisError) {
+      console.error('Resume analysis failed (non-critical):', analysisError);
+      // Don't fail the upload if analysis fails
+    }
+
     res.json(resume);
   } catch (err) {
     console.error(err);

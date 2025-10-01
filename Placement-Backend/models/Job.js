@@ -44,7 +44,11 @@ const jobSchema = new mongoose.Schema({
       type: Boolean,
       default: false
     }
-  }]
+  }],
+  suitableRoles: {
+    type: [String],
+    default: []
+  }
 });
 
 module.exports = mongoose.model('Job', jobSchema);

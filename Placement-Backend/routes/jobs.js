@@ -1,12 +1,12 @@
-// routes/jobs.js
 const express = require('express');
 const authMiddleware = require('../middleware/auth');
 const Job = require('../models/Job');
+const { detectJobRoles } = require('../utils/jobRoleDetector'); // ADD THIS
 const router = express.Router();
 const dotenv = require('dotenv');
 dotenv.config();
 
-// Post a new job - FIXED REQUIREMENTS HANDLING
+// Post a new job - UPDATED WITH AUTO-ROLE DETECTION
 router.post('/', authMiddleware, async (req, res) => {
   if (req.user.role !== 'recruiter') return res.status(403).json({ msg: 'Access denied' });
 
@@ -19,13 +19,14 @@ router.post('/', authMiddleware, async (req, res) => {
     let processedRequirements = [];
     if (requirements) {
       if (Array.isArray(requirements)) {
-        // If it's already an array, use it directly
         processedRequirements = requirements.filter(r => r && r.trim());
       } else if (typeof requirements === 'string') {
-        // If it's a string, split by commas
         processedRequirements = requirements.split(',').map(r => r.trim()).filter(r => r);
       }
     }
+
+    // AUTO-DETECT SUITABLE ROLES
+    const suitableRoles = detectJobRoles(processedRequirements);
 
     const job = new Job({
       recruiterId: req.user.id,
@@ -34,7 +35,8 @@ router.post('/', authMiddleware, async (req, res) => {
       minCgpa: parseFloat(minCgpa) || undefined,
       branch,
       requirements: processedRequirements,
-      customQuestions: customQuestions || []
+      customQuestions: customQuestions || [],
+      suitableRoles // ADD THIS
     });
 
     await job.save();
@@ -45,7 +47,7 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
-// Get all jobs
+// Get all jobs - remains the same
 router.get('/', async (req, res) => {
   try {
     const jobs = await Job.find().populate('recruiterId', 'company name').sort({ postedAt: -1 });
@@ -56,7 +58,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get job by ID including custom questions
+// Get job by ID including custom questions - remains the same
 router.get('/:id', async (req, res) => {
   try {
     const job = await Job.findById(req.params.id).populate('recruiterId', 'company name');

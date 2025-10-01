@@ -13,6 +13,21 @@ const oauth2Client = new OAuth2Client({
 
 let accessToken;
 
+// ADD THIS FUNCTION - Get Drive Service
+async function getDriveService() {
+  await loadToken();
+  if (!accessToken) {
+    throw new Error('No access token. Please authenticate first.');
+  }
+  
+  const drive = require('@googleapis/drive').drive({
+    version: 'v3',
+    auth: oauth2Client,
+  });
+  
+  return { drive };
+}
+
 async function loadToken() {
   if (fs.existsSync('token.json')) {
     const tokens = JSON.parse(fs.readFileSync('token.json'));
@@ -85,4 +100,120 @@ async function uploadResumeToDrive(fileBuffer, fileName, studentId, studentName)
   };
 }
 
-module.exports = { getAuthUrl, setToken, uploadResumeToDrive, loadToken, oauth2Client };
+// Create analysis folder if it doesn't exist
+async function createAnalysisFolder() {
+  try {
+    const { drive } = await getDriveService();
+    
+    // Check if folder already exists
+    const query = `name='Resume-Analysis' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+    const response = await drive.files.list({
+      q: query,
+      fields: 'files(id, name)'
+    });
+
+    if (response.data.files.length > 0) {
+      console.log('Analysis folder already exists:', response.data.files[0].id);
+      return response.data.files[0].id;
+    }
+
+    // Create new folder
+    const folderMetadata = {
+      name: 'Resume-Analysis',
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: [process.env.GOOGLE_DRIVE_FOLDER_ID] // Parent folder where resumes are stored
+    };
+
+    const folder = await drive.files.create({
+      resource: folderMetadata,
+      fields: 'id'
+    });
+
+    console.log('Created analysis folder:', folder.data.id);
+    return folder.data.id;
+  } catch (error) {
+    console.error('Error creating analysis folder:', error);
+    throw error;
+  }
+}
+
+// Save analysis JSON to Drive
+async function saveAnalysisToDrive(resumeId, analysis) {
+  try {
+    const { drive } = await getDriveService();
+    
+    // Ensure analysis folder exists
+    const analysisFolderId = await createAnalysisFolder();
+    
+    const fileMetadata = {
+      name: `resume-${resumeId}-analysis.json`,
+      parents: [analysisFolderId],
+      mimeType: 'application/json'
+    };
+    
+    const media = {
+      mimeType: 'application/json',
+      body: JSON.stringify(analysis, null, 2)
+    };
+    
+    const file = await drive.files.create({
+      resource: fileMetadata,
+      media: media,
+      fields: 'id, webViewLink'
+    });
+    
+    console.log(`Analysis saved for resume ${resumeId}: ${file.data.id}`);
+    return {
+      success: true,
+      fileId: file.data.id,
+      link: file.data.webViewLink
+    };
+  } catch (error) {
+    console.error('Error saving analysis to Drive:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+// Get analysis from Drive by resume ID
+async function getAnalysisFromDrive(resumeId) {
+  try {
+    const { drive } = await getDriveService();
+    const analysisFolderId = await createAnalysisFolder();
+    
+    const query = `name='resume-${resumeId}-analysis.json' and '${analysisFolderId}' in parents and trashed=false`;
+    const response = await drive.files.list({
+      q: query,
+      fields: 'files(id, name)'
+    });
+
+    if (response.data.files.length === 0) {
+      return null;
+    }
+
+    const fileId = response.data.files[0].id;
+    const file = await drive.files.get({
+      fileId: fileId,
+      alt: 'media'
+    });
+
+    return JSON.parse(file.data);
+  } catch (error) {
+    console.error('Error getting analysis from Drive:', error);
+    return null;
+  }
+}
+
+module.exports = { 
+  getAuthUrl, 
+  setToken, 
+  uploadResumeToDrive, 
+  loadToken, 
+  oauth2Client, 
+  createAnalysisFolder, 
+  saveAnalysisToDrive, 
+  getAnalysisFromDrive,
+  getDriveService // ADD THIS EXPORT
+};
