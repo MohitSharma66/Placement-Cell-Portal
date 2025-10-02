@@ -1,5 +1,5 @@
 const express = require('express');
-const authMiddleware = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
 const Job = require('../models/Job');
 const { detectJobRoles } = require('../utils/jobRoleDetector'); // ADD THIS
 const router = express.Router();
@@ -7,7 +7,7 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 // Post a new job - UPDATED WITH AUTO-ROLE DETECTION
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', auth, async (req, res) => {
   if (req.user.role !== 'recruiter') return res.status(403).json({ msg: 'Access denied' });
 
   try {

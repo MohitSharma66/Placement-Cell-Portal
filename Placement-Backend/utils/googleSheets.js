@@ -1,4 +1,3 @@
-// utils/googleSheets.js
 const { google } = require('googleapis');
 const fs = require('fs');
 const dotenv = require('dotenv');
@@ -44,23 +43,24 @@ async function initializeSheet() {
     sheet = { properties: { title: sheetName } };
   }
 
-  // UPDATED HEADERS - Added Custom Q&A column
+  // UPDATED HEADERS - Keep Application ID but maintain compatibility
   const headers = [
-    'Student Name', 
-    'Company', 
-    'Job Title', 
-    'Resume Title', 
-    'Applied At', 
-    'Application Status', 
-    'Resume Link',
-    '10th Score',
-    '12th Score',
-    'CGPA',
-    'Branch',
-    'Custom Questions & Answers' // New column for all custom Q&A
+    'Application ID', // Column A
+    'Student Name',   // Column B
+    'Company',        // Column C
+    'Job Title',      // Column D
+    'Resume Title',   // Column E
+    'Applied At',     // Column F
+    'Application Status', // Column G
+    'Resume Link',    // Column H
+    '10th Score',     // Column I
+    '12th Score',     // Column J
+    'CGPA',           // Column K
+    'Branch',         // Column L
+    'Custom Questions & Answers' // Column M
   ];
   
-  const range = `${sheetName}!A1:L1`;
+  const range = `${sheetName}!A1:M1`;
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
     range,
@@ -73,13 +73,15 @@ async function initializeSheet() {
       valueInputOption: 'RAW',
       resource: { values: [headers] },
     });
+    console.log('Created new sheet with updated headers');
   }
 
   return { sheetId, sheetName };
 }
 
-// UPDATED FUNCTION - Simplified custom answers handling
+// UPDATED FUNCTION - Store both applicationId and maintain compatibility
 async function addApplicationToSheet(
+  applicationId,
   studentName, 
   company, 
   jobTitle, 
@@ -104,26 +106,27 @@ async function addApplicationToSheet(
     
     await sheets.spreadsheets.values.append({
       spreadsheetId: sheetId,
-      range: `${sheetName}!A:L`,
+      range: `${sheetName}!A:M`,
       valueInputOption: 'RAW',
       resource: {
         values: [[
-          studentName, 
-          company, 
-          jobTitle, 
-          resumeTitle, 
-          appliedAt.toISOString(), 
-          status, 
-          resumeLink || '',
-          tenthScore,
-          twelfthScore,
-          cgpa,
-          branch,
-          customQnA || 'None' // Store all custom Q&A in one column
+          applicationId,        // Column A - Application ID
+          studentName,          // Column B - Student Name
+          company,              // Column C - Company
+          jobTitle,             // Column D - Job Title
+          resumeTitle,          // Column E - Resume Title
+          appliedAt.toISOString(), // Column F - Applied At
+          status,               // Column G - Application Status
+          resumeLink || '',     // Column H - Resume Link
+          tenthScore,           // Column I - 10th Score
+          twelfthScore,         // Column J - 12th Score
+          cgpa,                 // Column K - CGPA
+          branch,               // Column L - Branch
+          customQnA || 'None'   // Column M - Custom Q&A
         ]],
       },
     });
-    console.log('Application added to Google Sheet with custom Q&A');
+    console.log(`Application ${applicationId} added to Google Sheet`);
     return true;
   } catch (err) {
     console.error('Error adding to Google Sheet:', err);
@@ -131,35 +134,69 @@ async function addApplicationToSheet(
   }
 }
 
-async function updateApplicationStatusInSheet(applicationId, status) {
+// FIXED FUNCTION - Use appliedAt timestamp to find the row (like the old working version)
+// FIXED FUNCTION - Correct indexing
+async function updateApplicationStatusInSheet(appliedAtTimestamp, status) {
   try {
     const { sheetId, sheetName } = await initializeSheet();
     const sheets = await getSheets();
-    const range = `${sheetName}!A:L`;
+    const range = `${sheetName}!A:M`;
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
       range,
     });
 
     const rows = response.data.values;
-    if (!rows || rows.length <= 1) return false;
-
-    const rowIndex = rows.findIndex(row => row[4] === applicationId);
-    if (rowIndex === -1) {
-      console.error('Application not found in Google Sheet for update');
+    if (!rows || rows.length <= 1) {
+      console.log('No data rows found in sheet');
       return false;
     }
 
+    console.log(`🔍 Looking for application with Applied At: ${appliedAtTimestamp}`);
+    console.log(`📊 Total rows in data: ${rows.length}`);
+    
+    // Find the row by Applied At timestamp (column F, index 5)
+    const rowIndex = rows.findIndex((row, index) => {
+      if (index === 0) return false; // Skip header row
+      
+      const rowAppliedAt = row[5]; // Column F - Applied At (index 5)
+      console.log(`Row ${index}: Applied At = "${rowAppliedAt}"`);
+      
+      // Check if Applied At matches
+      const match = rowAppliedAt === appliedAtTimestamp;
+      if (match) {
+        console.log(`✅ Found matching application at JavaScript array index ${index}`);
+      }
+      return match;
+    });
+
+    if (rowIndex === -1) {
+      console.error(`❌ Application with Applied At ${appliedAtTimestamp} not found in Google Sheet`);
+      return false;
+    }
+
+    // CORRECTED: Status is in column G (index 6) - Application Status
+    // rowIndex + 1 because: 
+    // - JavaScript array index 1 = Google Sheets row 2 (first data row)
+    // - JavaScript array index 2 = Google Sheets row 3 (second data row)
+    const googleSheetsRowNumber = rowIndex + 1;
+    const updateRange = `${sheetName}!G${googleSheetsRowNumber}`;
+    
+    console.log(`📝 JavaScript array index: ${rowIndex}`);
+    console.log(`📝 Google Sheets row number: ${googleSheetsRowNumber}`);
+    console.log(`🔄 Updating range ${updateRange} to status: ${status}`);
+    
     await sheets.spreadsheets.values.update({
       spreadsheetId: sheetId,
-      range: `${sheetName}!F${rowIndex + 2}`,
+      range: updateRange,
       valueInputOption: 'RAW',
       resource: { values: [[status]] },
     });
-    console.log('Application status updated in Google Sheet');
+    
+    console.log(`✅ Application status updated to: ${status}`);
     return true;
   } catch (err) {
-    console.error('Error updating status in Google Sheet:', err);
+    console.error('❌ Error updating status in Google Sheet:', err);
     return false;
   }
 }

@@ -1,6 +1,6 @@
 // routes/students.js
 const express = require('express');
-const auth = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
 const User = require('../models/User');
 const Resume = require('../models/Resume');
 const { getAuthUrl, setToken, uploadResumeToDrive, loadToken } = require('../utils/driveOAuth');
@@ -12,14 +12,19 @@ const { saveAnalysisToDrive } = require('../utils/driveOAuth'); // ADD THIS
 
 // Configure multer for file uploads
 const upload = multer({
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB limit
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/pdf') {
+    // Check file type
+    const allowedMimes = ['application/pdf'];
+    if (allowedMimes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Only PDF files are allowed'), false);
+      cb(new Error('Invalid file type. Only PDF files are allowed.'), false);
     }
-  },
+  }
 });
 
 // OAuth 2.0 Authentication Routes

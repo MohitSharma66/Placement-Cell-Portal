@@ -50,7 +50,7 @@ async function getMatchingJobs(resumeId, allJobs) {
 }
 
 // Get jobs filtered by resume analysis - ADD THIS NEW ROUTE
-router.get('/jobs/:resumeId', authMiddleware, async (req, res) => {
+router.get('/jobs/:resumeId', authMiddleware.auth, async (req, res) => {
   if (req.user.role !== 'student') return res.status(403).json({ msg: 'Access denied' });
 
   try {
@@ -81,7 +81,7 @@ router.get('/jobs/:resumeId', authMiddleware, async (req, res) => {
 });
 
 // Apply to a job - UPDATED WITH CUSTOM ANSWERS
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', authMiddleware.auth, async (req, res) => {
   if (req.user.role !== 'student') return res.status(403).json({ msg: 'Access denied' });
 
   const { jobId, resumeId, customAnswers } = req.body;
@@ -128,6 +128,7 @@ router.post('/', authMiddleware, async (req, res) => {
     try {
       const student = await User.findById(req.user.id);
       await addApplicationToSheet(
+        application._id.toString(),
         student.name,
         job.recruiterId.company || 'N/A',
         job.title,
@@ -154,7 +155,7 @@ router.post('/', authMiddleware, async (req, res) => {
 });
 
 // Get applications for a specific job (recruiter)
-router.get('/recruiters/:jobId', authMiddleware, async (req, res) => {
+router.get('/recruiters/:jobId', authMiddleware.auth, async (req, res) => {
   if (req.user.role !== 'recruiter') return res.status(403).json({ msg: 'Access denied' });
 
   try {
@@ -175,7 +176,7 @@ router.get('/recruiters/:jobId', authMiddleware, async (req, res) => {
 });
 
 // Get my applications (student) - UPDATED TO INCLUDE CUSTOM ANSWERS
-router.get('/my', authMiddleware, async (req, res) => {
+router.get('/my', authMiddleware.auth, async (req, res) => {
   if (req.user.role !== 'student') return res.status(403).json({ msg: 'Access denied' });
 
   try {
@@ -190,7 +191,8 @@ router.get('/my', authMiddleware, async (req, res) => {
 });
 
 // Update application status (recruiter) - remains the same
-router.put('/:id/status', authMiddleware, async (req, res) => {
+// Update application status (recruiter) - FIX THIS ROUTE
+router.put('/:id/status', authMiddleware.auth, async (req, res) => {
   if (req.user.role !== 'recruiter') return res.status(403).json({ msg: 'Access denied' });
 
   const { status } = req.body;
@@ -213,8 +215,9 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
     application.status = status;
     await application.save();
 
-    // Update status in Google Sheet
+    // Update status in Google Sheet - FIX THIS CALL
     try {
+      // Pass the application ID, NOT the appliedAt timestamp
       await updateApplicationStatusInSheet(application.appliedAt.toISOString(), status);
     } catch (sheetErr) {
       console.error('Google Sheets update error (non-critical):', sheetErr.message);
