@@ -11,8 +11,6 @@ const xss = require('xss-clean');
 const hpp = require('hpp');
 
 // Custom middleware imports
-// In your server.js, add this debug line before the import:
-console.log('Error handler path:', require.resolve('./middleware/errorHandler'));
 const { errorHandler, notFound } = require('./middleware/errorHandler');
 
 dotenv.config();

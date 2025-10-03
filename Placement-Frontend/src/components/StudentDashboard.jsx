@@ -2,6 +2,8 @@ import axios from 'axios';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Navbar from './Navbar';
+import JobApplyModal from './JobApplyModal';
+import StudentSidebar from './StudentSidebar';
 
 const StudentDashboard = () => {
   const { user } = useAuth();
@@ -29,6 +31,9 @@ const StudentDashboard = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
+  
+  const [selectedJobForApply, setSelectedJobForApply] = useState(null);
+  const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
 
   useEffect(() => {
     fetchProfile();
@@ -51,19 +56,18 @@ const StudentDashboard = () => {
   };
 
   const loadFilteredJobs = async (resumeId) => {
-  try {
-    const res = await axios.get(`http://localhost:5000/api/applications/jobs/${resumeId}`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-    });
-    setFilteredJobs(res.data.jobs);
-    setJobsMessage(res.data.message);
-    setError('');
-  } catch (err) {
-    setError('Failed to load jobs');
-    // Fallback: load all jobs
-    fetchJobs();
-  }
-};
+    try {
+      const res = await axios.get(`http://localhost:5000/api/applications/jobs/${resumeId}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      setFilteredJobs(res.data.jobs);
+      setJobsMessage(res.data.message);
+      setError('');
+    } catch (err) {
+      setError('Failed to load jobs');
+      fetchJobs();
+    }
+  };
 
   const handleAuth = async () => {
     try {
@@ -187,22 +191,39 @@ const StudentDashboard = () => {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       setSelectedJobDetails(res.data);
-      setCustomAnswers({}); // Reset custom answers when job changes
+      setCustomAnswers({});
     } catch (err) {
       setError('Failed to fetch job details');
     }
   };
 
   const handleApplyClick = (jobId) => {
-  setSelectedJob(jobId);
-  fetchJobDetails(jobId);
-  setShowPopup(true);
-  
-  // Pre-select the resume if one is selected for job filtering
-  if (selectedResumeForJobs) {
-    setSelectedResume(selectedResumeForJobs);
-  }
-};
+    const job = jobs.find(j => j._id === jobId) || filteredJobs.find(j => j._id === jobId);
+    if (job) {
+      setSelectedJobForApply(job);
+      setIsApplyModalOpen(true);
+    }
+  };
+
+  const handleApplyToJob = async (jobId, resumeId, customAnswers) => {
+    try {
+      await axios.post('http://localhost:5000/api/applications', { 
+        jobId, 
+        resumeId,
+        customAnswers
+      }, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      
+      fetchApplications();
+      setIsApplyModalOpen(false);
+      setSelectedJobForApply(null);
+      setError('');
+      alert('Application submitted successfully!');
+    } catch (err) {
+      setError(err.response?.data?.msg || 'Failed to apply');
+    }
+  };
 
   const updateCustomAnswer = (question, answer) => {
     setCustomAnswers(prev => ({
@@ -218,7 +239,6 @@ const StudentDashboard = () => {
     }
 
     try {
-      // Convert customAnswers object to array format
       const customAnswersArray = Object.entries(customAnswers).map(([question, answer]) => ({
         question,
         answer: answer.toString()
@@ -365,184 +385,95 @@ const StudentDashboard = () => {
           </section>
         );
       case 'jobs':
-  return (
-    <section className="card mb-8">
-      <h2 className="text-xl font-semibold mb-4 text-gray-800">Job Opportunities</h2>
-      
-      {/* Resume Selection for Job Filtering */}
-      <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Select Resume to See Matching Jobs
-        </label>
-        <div className="flex gap-4">
-          <select
-            value={selectedResumeForJobs}
-            onChange={(e) => {
-              setSelectedResumeForJobs(e.target.value);
-              if (e.target.value) {
-                loadFilteredJobs(e.target.value);
-              } else {
-                setFilteredJobs([]);
-                setJobsMessage('');
-              }
-            }}
-            className="select flex-1"
-          >
-            <option value="">Select a resume to filter jobs...</option>
-            {resumes.map((r) => (
-              <option key={r._id} value={r._id}>{r.title}</option>
-            ))}
-          </select>
-          <button
-            onClick={() => {
-              setSelectedResumeForJobs('');
-              setFilteredJobs([]);
-              setJobsMessage('');
-              fetchJobs();
-            }}
-            className="btn-secondary"
-          >
-            Show All Jobs
-          </button>
-        </div>
-        {jobsMessage && (
-          <p className="text-sm text-blue-600 mt-2">{jobsMessage}</p>
-        )}
-      </div>
-
-      {/* Jobs Display */}
-      {filteredJobs.length === 0 && selectedResumeForJobs ? (
-        <div className="text-center py-8">
-          <p className="text-gray-500">No matching jobs found for your selected resume.</p>
-          <p className="text-sm text-gray-400 mt-2">Try selecting a different resume or view all jobs.</p>
-        </div>
-      ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {(selectedResumeForJobs ? filteredJobs : jobs).map((job) => (
-            <div key={job._id} className="card hover:shadow-md transition-shadow">
-              <h3 className="font-bold text-lg text-gray-800 mb-1">{job.title}</h3>
-              <p className="text-sm text-gray-500 mb-1">Company: {job.recruiterId?.company || 'N/A'}</p>
-              <p className="text-sm text-gray-500 mb-1">Min CGPA: {job.minCgpa || 'N/A'}</p>
-              <p className="text-sm text-gray-500 mb-1">Branch: {job.branch || 'Any'}</p>
-              {job.suitableRoles && job.suitableRoles.length > 0 && (
-                <p className="text-sm text-primary mb-1">
-                  Suitable for: {job.suitableRoles.join(', ')}
-                </p>
-              )}
-              <p className="text-sm text-gray-500">Posted: {new Date(job.postedAt).toLocaleDateString()}</p>
-              <div className="mt-4">
-                <button
-                  onClick={() => handleApplyClick(job._id)}
-                  className="btn-primary"
+        return (
+          <section className="card mb-8">
+            <h2 className="text-xl font-semibold mb-4 text-gray-800">Job Opportunities</h2>
+            
+            <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Resume to See Matching Jobs
+              </label>
+              <div className="flex gap-4">
+                <select
+                  value={selectedResumeForJobs}
+                  onChange={(e) => {
+                    setSelectedResumeForJobs(e.target.value);
+                    if (e.target.value) {
+                      loadFilteredJobs(e.target.value);
+                    } else {
+                      setFilteredJobs([]);
+                      setJobsMessage('');
+                    }
+                  }}
+                  className="select flex-1"
                 >
-                  Apply
+                  <option value="">Select a resume to filter jobs...</option>
+                  {resumes.map((r) => (
+                    <option key={r._id} value={r._id}>{r.title}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => {
+                    setSelectedResumeForJobs('');
+                    setFilteredJobs([]);
+                    setJobsMessage('');
+                    fetchJobs();
+                  }}
+                  className="btn-secondary"
+                >
+                  Show All Jobs
                 </button>
               </div>
+              {jobsMessage && (
+                <p className="text-sm text-blue-600 mt-2">{jobsMessage}</p>
+              )}
             </div>
-          ))}
-        </div>
-      )}
-            {showPopup && selectedJob && selectedJobDetails && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
-                  <h2 className="text-xl font-semibold mb-4 text-gray-800">
-                    Apply to {selectedJobDetails.title}
-                  </h2>
-                  
-                  <div className="mb-4">
-                    <h3 className="text-lg font-medium text-gray-800 mb-2">Job Requirements</h3>
-                    <p className="text-sm text-gray-500">Min CGPA: {selectedJobDetails.minCgpa || 'N/A'}</p>
-                    <p className="text-sm text-gray-500">Branch: {selectedJobDetails.branch || 'Any'}</p>
-                    <p className="text-sm text-gray-500">
-                      Requirements: {selectedJobDetails.requirements?.join(', ') || 'None'}
-                    </p>
-                  </div>
-                  
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Select Resume</label>
-                    <select
-                      value={selectedResume}
-                      onChange={(e) => setSelectedResume(e.target.value)}
-                      className="select w-full"
-                    >
-                      <option value="">Select Resume</option>
-                      {resumes.map((r) => (
-                        <option key={r._id} value={r._id}>{r.title}</option>
-                      ))}
-                    </select>
-                  </div>
-                  
-                  {/* Custom Questions Section */}
-                  {selectedJobDetails.customQuestions && selectedJobDetails.customQuestions.length > 0 && (
-                    <div className="mb-4">
-                      <h3 className="text-lg font-medium text-gray-800 mb-2">Additional Questions</h3>
-                      <div className="space-y-4">
-                        {selectedJobDetails.customQuestions.map((q, index) => (
-                          <div key={index} className="space-y-2">
-                            <label className="block text-sm font-medium text-gray-700">
-                              {q.question} {q.required && <span className="text-red-500">*</span>}
-                            </label>
-                            
-                            {q.type === 'textarea' ? (
-                              <textarea
-                                value={customAnswers[q.question] || ''}
-                                onChange={(e) => updateCustomAnswer(q.question, e.target.value)}
-                                placeholder={`Enter your answer for "${q.question}"`}
-                                className="input w-full"
-                                rows="3"
-                                required={q.required}
-                              />
-                            ) : q.type === 'select' ? (
-                              <select
-                                value={customAnswers[q.question] || ''}
-                                onChange={(e) => updateCustomAnswer(q.question, e.target.value)}
-                                className="select w-full"
-                                required={q.required}
-                              >
-                                <option value="">Select an option</option>
-                                {q.options.map((option, optIndex) => (
-                                  <option key={optIndex} value={option}>
-                                    {option}
-                                  </option>
-                                ))}
-                              </select>
-                            ) : (
-                              <input
-                                type="text"
-                                value={customAnswers[q.question] || ''}
-                                onChange={(e) => updateCustomAnswer(q.question, e.target.value)}
-                                placeholder={`Enter your answer for "${q.question}"`}
-                                className="input w-full"
-                                required={q.required}
-                              />
-                            )}
-                          </div>
-                        ))}
+
+            {filteredJobs.length === 0 && selectedResumeForJobs ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500">No matching jobs found for your selected resume.</p>
+                <p className="text-sm text-gray-400 mt-2">Try selecting a different resume or view all jobs.</p>
+              </div>
+            ) : (
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {(selectedResumeForJobs ? filteredJobs : jobs).map((job) => (
+                  <div key={job._id} className="card hover:shadow-md transition-shadow">
+                    <h3 className="font-bold text-lg text-gray-800 mb-1">{job.title}</h3>
+                    <p className="text-sm text-gray-500 mb-1">Company: {job.recruiterId?.company || 'N/A'}</p>
+                    <p className="text-sm text-gray-500 mb-1">Min CGPA: {job.minCgpa || 'N/A'}</p>
+                    <p className="text-sm text-gray-500 mb-1">Branch: {job.branch || 'Any'}</p>
+                    {job.suitableRoles && job.suitableRoles.length > 0 && (
+                      <p className="text-sm text-primary mb-1">
+                        Suitable for: {job.suitableRoles.join(', ')}
+                      </p>
+                    )}
+                    
+                    {job.jobRequirements && (
+                      <div className="mt-2 p-2 bg-gray-50 rounded text-xs">
+                        <p className="font-medium">Requirements:</p>
+                        {job.jobRequirements.skills && job.jobRequirements.skills.length > 0 && (
+                          <p>Skills: {job.jobRequirements.skills.join(', ')}</p>
+                        )}
+                        {job.jobRequirements.minCgpa && (
+                          <p>Min CGPA: {job.jobRequirements.minCgpa}</p>
+                        )}
+                        {job.jobRequirements.minExperienceYears && (
+                          <p>Experience: {job.jobRequirements.minExperienceYears} years</p>
+                        )}
                       </div>
+                    )}
+                    
+                    <p className="text-sm text-gray-500">Posted: {new Date(job.postedAt).toLocaleDateString()}</p>
+                    <div className="mt-4">
+                      <button
+                        onClick={() => handleApplyClick(job._id)}
+                        className="btn-primary"
+                      >
+                        Apply Now
+                      </button>
                     </div>
-                  )}
-                  
-                  {error && <p className="text-red-500 bg-red-50 p-2 rounded-md mb-4 text-center">{error}</p>}
-                  
-                  <div className="flex justify-end space-x-2">
-                    <button
-                      onClick={() => {
-                        setShowPopup(false);
-                        setSelectedJob(null);
-                        setSelectedResume('');
-                        setCustomAnswers({});
-                        setSelectedJobDetails(null);
-                        setError('');
-                      }}
-                      className="btn-secondary"
-                    >
-                      Cancel
-                    </button>
-                    <button onClick={applyToJob} className="btn-primary">
-                      Submit Application
-                    </button>
                   </div>
-                </div>
+                ))}
               </div>
             )}
           </section>
@@ -562,7 +493,7 @@ const StudentDashboard = () => {
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
                           <span className="font-medium">
-                            {app.jobId.title} ({app.jobId.recruiterId.company || 'N/A'})
+                            {app.jobId.title} ({app.jobId.recruiterId?.company || 'N/A'})
                           </span>{' '}
                           - Status:{' '}
                           <span
@@ -578,7 +509,6 @@ const StudentDashboard = () => {
                             {app.resumeId.title}
                           </a>
                           
-                          {/* Display custom answers if any */}
                           {app.customAnswers && app.customAnswers.length > 0 && (
                             <div className="mt-2">
                               <p className="text-sm font-medium text-gray-700">Your Answers:</p>
@@ -608,64 +538,47 @@ const StudentDashboard = () => {
     <div className="flex flex-col min-h-screen bg-gray-50">
       <Navbar />
       <div className="flex flex-grow">
-        <aside
-          className={`bg-white shadow-sm p-6 flex flex-col space-y-3 transition-all duration-300 ${isSidebarOpen ? 'w-64' : 'w-0 opacity-0 overflow-hidden'}`}
-        >
-          <button
-            onClick={() => setIsSidebarOpen(false)}
-            className="text-gray-700 font-medium px-4 py-1 rounded-md hover:bg-gray-100 self-end mb-2"
-          >
-            ✕
-          </button>
-          <button
-            onClick={() => setActiveSection('profile')}
-            className={`text-left px-4 py-2 rounded-md text-gray-700 font-medium ${
-              activeSection === 'profile' ? 'bg-blue-50 text-primary' : 'hover:bg-gray-100'
-            }`}
-          >
-            Profile
-          </button>
-          <button
-            onClick={() => setActiveSection('resume')}
-            className={`text-left px-4 py-2 rounded-md text-gray-700 font-medium ${
-              activeSection === 'resume' ? 'bg-blue-50 text-primary' : 'hover:bg-gray-100'
-            }`}
-          >
-            Resume
-          </button>
-          <button
-            onClick={() => setActiveSection('jobs')}
-            className={`text-left px-4 py-2 rounded-md text-gray-700 font-medium ${
-              activeSection === 'jobs' ? 'bg-blue-50 text-primary' : 'hover:bg-gray-100'
-            }`}
-          >
-            Job Opportunities
-          </button>
-          <button
-            onClick={() => setActiveSection('applications')}
-            className={`text-left px-4 py-2 rounded-md text-gray-700 font-medium ${
-              activeSection === 'applications' ? 'bg-blue-50 text-primary' : 'hover:bg-gray-100'
-            }`}
-          >
-            My Applications
-          </button>
-        </aside>
-        <main className="flex-grow max-w-7xl mx-auto p-6 relative">
-          <div className="absolute top-0 left-0 w-48 h-48 bg-gray-200 rounded-full z-0 opacity-50 overflow-hidden" style={{ zIndex: 0 }}>
-            <div className="text-center text-gray-600 font-bold mt-16">LOGO</div>
+        <StudentSidebar
+          activeSection={activeSection}
+          setActiveSection={setActiveSection}
+          isSidebarOpen={isSidebarOpen}
+          setIsSidebarOpen={setIsSidebarOpen}
+        />
+        
+        <main className={`flex-grow transition-all duration-300 ${
+          isSidebarOpen ? 'lg:ml-0' : 'lg:ml-0'
+        } relative`}>
+          {/* Background Logo with 25% opacity */}
+          <div 
+            className="fixed inset-0 z-0 opacity-25 pointer-events-none"
+            style={{
+              backgroundImage: 'url(/src/assets/logo.png)',
+              backgroundSize: '50%',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat',
+              transform: 'scale(0.8)'
+            }}
+          />
+          
+          <div className="max-w-7xl mx-auto p-6 relative z-10">
+            {error && <p className="text-red-500 bg-red-50 p-3 rounded-md mb-6 text-center font-medium">{error}</p>}
+            {renderSection()}
           </div>
-          {error && <p className="text-red-500 bg-red-50 p-3 rounded-md mb-6 text-center font-medium z-10">{error}</p>}
-          {renderSection()}
-          {!isSidebarOpen && (
-            <button
-              onClick={() => setIsSidebarOpen(true)}
-              className="fixed top-20 left-4 bg-primary text-white px-3 py-2 rounded-md hover:bg-blue-700 z-10"
-            >
-              ☰
-            </button>
-          )}
         </main>
       </div>
+
+      {isApplyModalOpen && selectedJobForApply && (
+        <JobApplyModal
+          job={selectedJobForApply}
+          isOpen={isApplyModalOpen}
+          onClose={() => {
+            setIsApplyModalOpen(false);
+            setSelectedJobForApply(null);
+          }}
+          onApply={handleApplyToJob}
+          resumes={resumes}
+        />
+      )}
     </div>
   );
 };
