@@ -10,6 +10,21 @@ const authClient = new google.auth.GoogleAuth({
   scopes: ['https://www.googleapis.com/auth/spreadsheets']
 });
 
+// Add this function to read sheet data for statistics
+async function getSheetData(sheetId, range) {
+  try {
+    const sheets = await getSheets(); // This now works
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: sheetId,
+      range: range,
+    });
+    return response.data.values || [];
+  } catch (err) {
+    console.error('Error reading sheet data:', err);
+    throw err;
+  }
+}
+
 async function getSheets() {
   const auth = await authClient.getClient();
   return google.sheets({ version: 'v4', auth });
@@ -51,16 +66,17 @@ async function initializeSheet() {
     'Job Title',      // Column D
     'Resume Title',   // Column E
     'Applied At',     // Column F
-    'Application Status', // Column G
-    'Resume Link',    // Column H
-    '10th Score',     // Column I
-    '12th Score',     // Column J
-    'CGPA',           // Column K
-    'Branch',         // Column L
-    'Custom Questions & Answers' // Column M
+    'Academic Year',  // Column G
+    'Application Status', // Column H
+    'Resume Link',    // Column I
+    '10th Score',     // Column J
+    '12th Score',     // Column K
+    'CGPA',           // Column L
+    'Branch',         // Column M
+    'Custom Questions & Answers' // Column N
   ];
-  
-  const range = `${sheetName}!A1:M1`;
+
+  const range = `${sheetName}!A1:N1`;
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
     range,
@@ -104,29 +120,35 @@ async function addApplicationToSheet(
       `Q: ${ca.question}\nA: ${ca.answer}`
     ).join('\n\n');
     
+    // Calculate academic year from appliedAt date
+    // Format: YYYY-YYYY+1 (e.g., 2025-2026 for appliedAt in 2025)
+    const appliedYear = appliedAt.getFullYear();
+    const academicYear = `${appliedYear}-${appliedYear + 1}`;
+    
     await sheets.spreadsheets.values.append({
       spreadsheetId: sheetId,
-      range: `${sheetName}!A:M`,
+      range: `${sheetName}!A:N`,  // Changed from A:M to A:N
       valueInputOption: 'RAW',
       resource: {
         values: [[
-          applicationId,        // Column A - Application ID
-          studentName,          // Column B - Student Name
-          company,              // Column C - Company
-          jobTitle,             // Column D - Job Title
-          resumeTitle,          // Column E - Resume Title
-          appliedAt.toISOString(), // Column F - Applied At
-          status,               // Column G - Application Status
-          resumeLink || '',     // Column H - Resume Link
-          tenthScore,           // Column I - 10th Score
-          twelfthScore,         // Column J - 12th Score
-          cgpa,                 // Column K - CGPA
-          branch,               // Column L - Branch
-          customQnA || 'None'   // Column M - Custom Q&A
+          applicationId,               // Column A
+          studentName,                 // Column B
+          company,                     // Column C
+          jobTitle,                    // Column D
+          resumeTitle,                 // Column E
+          appliedAt.toISOString(),     // Column F
+          academicYear,                // Column G  <-- NEW: Academic Year
+          status,                      // Column H
+          resumeLink || '',            // Column I
+          tenthScore,                  // Column J
+          twelfthScore,                // Column K
+          cgpa,                        // Column L
+          branch,                      // Column M
+          customQnA || 'None'          // Column N
         ]],
       },
     });
-    console.log(`Application ${applicationId} added to Google Sheet`);
+    console.log(`Application ${applicationId} added to Google Sheet with Academic Year: ${academicYear}`);
     return true;
   } catch (err) {
     console.error('Error adding to Google Sheet:', err);
@@ -140,7 +162,7 @@ async function updateApplicationStatusInSheet(appliedAtTimestamp, status) {
   try {
     const { sheetId, sheetName } = await initializeSheet();
     const sheets = await getSheets();
-    const range = `${sheetName}!A:M`;
+    const range = `${sheetName}!A:N`;  // Changed from A:M to A:N
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
       range,
@@ -175,12 +197,9 @@ async function updateApplicationStatusInSheet(appliedAtTimestamp, status) {
       return false;
     }
 
-    // CORRECTED: Status is in column G (index 6) - Application Status
-    // rowIndex + 1 because: 
-    // - JavaScript array index 1 = Google Sheets row 2 (first data row)
-    // - JavaScript array index 2 = Google Sheets row 3 (second data row)
+    // CORRECTED: Status is now in column H (index 7) - Application Status
     const googleSheetsRowNumber = rowIndex + 1;
-    const updateRange = `${sheetName}!G${googleSheetsRowNumber}`;
+    const updateRange = `${sheetName}!H${googleSheetsRowNumber}`;  // Changed from G to H
     
     console.log(`📝 JavaScript array index: ${rowIndex}`);
     console.log(`📝 Google Sheets row number: ${googleSheetsRowNumber}`);
@@ -201,4 +220,4 @@ async function updateApplicationStatusInSheet(appliedAtTimestamp, status) {
   }
 }
 
-module.exports = { addApplicationToSheet, updateApplicationStatusInSheet };
+module.exports = { addApplicationToSheet, updateApplicationStatusInSheet, getSheetData, getSheets };

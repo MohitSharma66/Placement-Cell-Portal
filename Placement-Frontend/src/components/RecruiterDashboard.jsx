@@ -1,28 +1,30 @@
 import axios from 'axios';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import Navbar from './Navbar';
-import RecruiterSidebar from './RecruiterSidebar';
 import ApplicationQuickView from './ApplicationQuickView';
+import Navbar from './Navbar';
+import PlacementStatistics from './PlacementStatistics';
+import RecruiterSidebar from './RecruiterSidebar';
 
 const RecruiterDashboard = () => {
   const { user } = useAuth();
   const [profile, setProfile] = useState({ company: '' });
   const [newJob, setNewJob] = useState({ 
-    title: '', 
-    description: '', 
-    minCgpa: '', 
-    branch: '', 
-    requirements: '',
-    jobRequirements: {
-      skills: [],
-      minCgpa: '',
-      minExperienceYears: '',
-      allowedBranches: [],
-      otherNotes: '',
-      lastDate: ''
-    }
-  });
+  title: '', 
+  description: '', 
+  minCgpa: '', 
+  branch: '', 
+  requirements: '',
+  skillInput: '', // Add this line
+  jobRequirements: {
+    skills: [],
+    minCgpa: '',
+    minExperienceYears: '',
+    allowedBranches: [],
+    otherNotes: '',
+    lastDate: ''
+  }
+});
   const [customQuestions, setCustomQuestions] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [applications, setApplications] = useState({});
@@ -96,68 +98,82 @@ const RecruiterDashboard = () => {
   };
 
   const postJob = async (e) => {
-    e.preventDefault();
-    if (!newJob.title || !newJob.description) {
-      setError('Title and description are required');
-      return;
-    }
+  e.preventDefault();
+  
+  // Basic validation
+  if (!newJob.title || !newJob.description) {
+    setError('Title and description are required');
+    return;
+  }
 
-    try {
-      const processedQuestions = customQuestions.map(q => ({
-        question: q.question.trim(),
-        type: q.type,
-        required: q.required,
-        options: q.type === 'select' ? q.options.split(',').map(opt => opt.trim()).filter(opt => opt) : []
-      })).filter(q => q.question !== '');
+  try {
+    // Process custom questions
+    const processedQuestions = customQuestions.map(q => ({
+      question: q.question.trim(),
+      type: q.type,
+      required: q.required,
+      options: q.type === 'select' ? q.options.split(',').map(opt => opt.trim()).filter(opt => opt) : []
+    })).filter(q => q.question !== '');
 
-      const processedRequirements = newJob.requirements 
-        ? newJob.requirements.split(',').map(r => r.trim()).filter(r => r)
-        : [];
+    // Process job requirements data
+    const processedJobRequirements = {
+      skills: newJob.jobRequirements.skills,
+      minCgpa: newJob.jobRequirements.minCgpa ? parseFloat(newJob.jobRequirements.minCgpa) : undefined,
+      minExperienceYears: newJob.jobRequirements.minExperienceYears ? parseInt(newJob.jobRequirements.minExperienceYears) : undefined,
+      allowedBranches: newJob.jobRequirements.allowedBranches,
+      otherNotes: newJob.jobRequirements.otherNotes,
+      lastDate: newJob.jobRequirements.lastDate ? new Date(newJob.jobRequirements.lastDate) : undefined
+    };
 
-      const processedJobRequirements = {
-        skills: newJob.jobRequirements.skills,
-        minCgpa: newJob.jobRequirements.minCgpa ? parseFloat(newJob.jobRequirements.minCgpa) : undefined,
-        minExperienceYears: newJob.jobRequirements.minExperienceYears ? parseInt(newJob.jobRequirements.minExperienceYears) : undefined,
-        allowedBranches: newJob.jobRequirements.allowedBranches,
-        otherNotes: newJob.jobRequirements.otherNotes,
-        lastDate: newJob.jobRequirements.lastDate ? new Date(newJob.jobRequirements.lastDate) : undefined
-      };
-
-      const jobData = {
-        ...newJob,
-        minCgpa: parseFloat(newJob.minCgpa) || undefined,
-        requirements: processedRequirements,
-        customQuestions: processedQuestions,
-        jobRequirements: processedJobRequirements
-      };
-      
-      await axios.post('http://localhost:5000/api/jobs', jobData, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-      });
-      
-      setNewJob({ 
-        title: '', 
-        description: '', 
-        minCgpa: '', 
-        branch: '', 
-        requirements: '',
-        jobRequirements: {
-          skills: [],
-          minCgpa: '',
-          minExperienceYears: '',
-          allowedBranches: [],
-          otherNotes: '',
-          lastDate: ''
-        }
-      });
-      setCustomQuestions([]);
-      fetchJobs();
-      setError('');
-      alert('Job posted successfully');
-    } catch (err) {
-      setError(err.response?.data?.msg || 'Failed to post job');
-    }
-  };
+    // Prepare the main job data to be sent to backend
+    const jobData = {
+      title: newJob.title,
+      description: newJob.description,
+      minCgpa: parseFloat(newJob.minCgpa) || undefined,
+      branch: newJob.branch,
+      // CRITICAL: Send skills to 'requirements' field for role detection
+      requirements: newJob.jobRequirements.skills,
+      customQuestions: processedQuestions,
+      // Include the structured job requirements object
+      jobRequirements: processedJobRequirements
+    };
+    
+    // Send POST request to create job
+    await axios.post('http://localhost:5000/api/jobs', jobData, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+    });
+    
+    // Reset form state on success
+    // Reset form state on success
+setNewJob({ 
+  title: '', 
+  description: '', 
+  minCgpa: '', 
+  branch: '', 
+  requirements: '',
+  skillInput: '', // Reset this too
+  jobRequirements: {
+    skills: [],
+    minCgpa: '',
+    minExperienceYears: '',
+    allowedBranches: [],
+    otherNotes: '',
+    lastDate: ''
+  }
+});
+    setCustomQuestions([]);
+    
+    // Refresh jobs list and show success message
+    fetchJobs();
+    setError('');
+    alert('Job posted successfully!');
+    
+  } catch (err) {
+    // Handle errors
+    setError(err.response?.data?.msg || 'Failed to post job');
+    console.error('Job posting error:', err);
+  }
+};
 
   const fetchApplicationsForJob = async (jobId) => {
     try {
@@ -257,21 +273,84 @@ const RecruiterDashboard = () => {
           </div>
 
           <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Required Skills (Comma-separated)</label>
-            <input
-              type="text"
-              value={newJob.jobRequirements.skills.join(', ')}
-              onChange={(e) => setNewJob({ 
-                ...newJob, 
-                jobRequirements: { 
-                  ...newJob.jobRequirements, 
-                  skills: e.target.value.split(',').map(s => s.trim()).filter(s => s)
-                }
-              })}
-              placeholder="e.g., JavaScript, React, Node.js"
-              className="input"
-            />
-          </div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">
+    Required Skills (Type skills and press Enter or comma to add)
+  </label>
+  
+  {/* Skills display as tags */}
+  <div className="flex flex-wrap gap-2 mb-2">
+    {newJob.jobRequirements.skills.map((skill, index) => (
+      <span 
+        key={index}
+        className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800"
+      >
+        {skill}
+        <button
+          type="button"
+          onClick={() => {
+            const updatedSkills = newJob.jobRequirements.skills.filter((_, i) => i !== index);
+            setNewJob({
+              ...newJob,
+              jobRequirements: {
+                ...newJob.jobRequirements,
+                skills: updatedSkills
+              }
+            });
+          }}
+          className="ml-2 text-blue-600 hover:text-blue-800"
+        >
+          ×
+        </button>
+      </span>
+    ))}
+  </div>
+
+  {/* Input field for adding new skills */}
+  <input
+    type="text"
+    value={newJob.skillInput || ''}
+    onChange={(e) => setNewJob({
+      ...newJob,
+      skillInput: e.target.value
+    })}
+    onKeyDown={(e) => {
+      if ((e.key === 'Enter' || e.key === ',') && newJob.skillInput?.trim()) {
+        e.preventDefault();
+        const newSkill = newJob.skillInput.trim().replace(/,/g, '');
+        if (newSkill && !newJob.jobRequirements.skills.includes(newSkill)) {
+          setNewJob({
+            ...newJob,
+            jobRequirements: {
+              ...newJob.jobRequirements,
+              skills: [...newJob.jobRequirements.skills, newSkill]
+            },
+            skillInput: '' // Clear input after adding
+          });
+        }
+      }
+    }}
+    onBlur={() => {
+      if (newJob.skillInput?.trim()) {
+        const newSkill = newJob.skillInput.trim().replace(/,/g, '');
+        if (newSkill && !newJob.jobRequirements.skills.includes(newSkill)) {
+          setNewJob({
+            ...newJob,
+            jobRequirements: {
+              ...newJob.jobRequirements,
+              skills: [...newJob.jobRequirements.skills, newSkill]
+            },
+            skillInput: '' // Clear input after adding
+          });
+        }
+      }
+    }}
+    placeholder="Type a skill and press Enter or comma to add"
+    className="input"
+  />
+  <p className="text-xs text-gray-500 mt-1">
+    Type each skill and press Enter or comma to add it to the list
+  </p>
+</div>
 
           <div className="mt-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">Allowed Branches (Comma-separated)</label>
@@ -554,6 +633,8 @@ const RecruiterDashboard = () => {
         return renderApplicationsSection();
       case 'postJob':
         return renderPostJobSection();
+      case 'statistics':
+        return <PlacementStatistics />;
       default:
         return null;
     }
@@ -599,6 +680,7 @@ const RecruiterDashboard = () => {
           setIsQuickViewOpen(false);
           setSelectedApplication(null);
         }}
+        updateApplicationStatus={updateApplicationStatus}
       />
     </div>
   );

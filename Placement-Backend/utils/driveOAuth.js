@@ -13,47 +13,53 @@ const oauth2Client = new OAuth2Client({
 
 let accessToken;
 
-// ADD THIS FUNCTION - Get Drive Service
-async function getDriveService() {
-  await loadToken();
-  if (!accessToken) {
-    throw new Error('No access token. Please authenticate first.');
-  }
-  
-  const drive = require('@googleapis/drive').drive({
-    version: 'v3',
-    auth: oauth2Client,
-  });
-  
-  return { drive };
-}
-
+// MODIFIED: Handle initial setup gracefully
 async function loadToken() {
   if (fs.existsSync('token.json')) {
     const tokens = JSON.parse(fs.readFileSync('token.json'));
     oauth2Client.setCredentials(tokens);
     accessToken = tokens.access_token;
+    
     const now = Date.now();
     if (tokens.expiry_date && tokens.expiry_date < now) {
-      await oauth2Client.refreshAccessToken();
-      const newTokens = oauth2Client.credentials;
-      accessToken = newTokens.access_token;
-      fs.writeFileSync('token.json', JSON.stringify(newTokens));
-      console.log('Token refreshed:', newTokens);
+      try {
+        // Only refresh if we have a refresh token
+        if (tokens.refresh_token) {
+          await oauth2Client.refreshAccessToken();
+          const newTokens = oauth2Client.credentials;
+          accessToken = newTokens.access_token;
+          fs.writeFileSync('token.json', JSON.stringify(newTokens));
+          console.log('✅ Token refreshed');
+        } else {
+          console.log('⚠️ No refresh token available - user needs to reauthorize');
+        }
+      } catch (refreshErr) {
+        console.error('❌ Token refresh failed:', refreshErr.message);
+        // Don't throw - allow user to reauthorize
+      }
     } else {
-      console.log('Token still valid, no refresh needed');
+      console.log('✅ Token still valid');
     }
+  } else {
+    // First-time setup - no token.json exists
+    console.log('📝 No token.json found. First-time setup required.');
   }
 }
 
+// MODIFIED: Don't call loadToken() on initial auth URL generation
 async function getAuthUrl() {
   console.log('Generating auth URL with redirect URI:', process.env.GOOGLE_REDIRECT_URI);
-  await loadToken();
+  
+  // CRITICAL FIX: Don't call loadToken() here on initial setup
+  // Only call it if we're already authenticated and need to refresh
+  
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: ['https://www.googleapis.com/auth/drive.file'],
+    prompt: 'consent' // ADD THIS: Ensures refresh token on first authorization
   });
-  console.log('Generated auth URL:', authUrl);
+  
+  console.log('✅ Generated auth URL');
   return authUrl;
 }
 
@@ -62,7 +68,33 @@ async function setToken(code) {
   oauth2Client.setCredentials(tokens);
   accessToken = tokens.access_token;
   fs.writeFileSync('token.json', JSON.stringify(tokens));
+  console.log('✅ Token saved to token.json');
   return tokens;
+}
+
+// ADD THIS: Check if OAuth is initialized
+function isOAuthInitialized() {
+  return fs.existsSync('token.json');
+}
+
+// MODIFIED: Get Drive Service - handle unauthenticated state
+async function getDriveService() {
+  if (!isOAuthInitialized()) {
+    throw new Error('OAuth not initialized. Please authenticate first via /auth/google');
+  }
+  
+  await loadToken();
+  
+  if (!accessToken) {
+    throw new Error('No access token. Please re-authenticate.');
+  }
+  
+  const drive = require('@googleapis/drive').drive({
+    version: 'v3',
+    auth: oauth2Client,
+  });
+  
+  return { drive };
 }
 
 async function uploadResumeToDrive(fileBuffer, fileName, studentId, studentName) {

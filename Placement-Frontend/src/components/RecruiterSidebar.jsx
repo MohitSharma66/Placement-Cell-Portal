@@ -1,5 +1,4 @@
 // RecruiterSidebar.jsx
-import React from 'react';
 import { useAuth } from '../context/AuthContext';
 
 const MenuItem = ({ id, label, icon, active, onClick }) => (
@@ -36,6 +35,12 @@ const RecruiterSidebar = ({ activeSection, setActiveSection, isSidebarOpen, setI
         <path d="M12 5v14M5 12h14" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     ),
+    statistics: (  // NEW: Statistics icon (pie chart)
+      <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M12 12V3M21 12H12M12 12l7.5-7.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    ),
     logout: (
       <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5">
         <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h4a3 3 0 0 1 3 3v1" strokeLinecap="round" strokeLinejoin="round"/>
@@ -57,6 +62,7 @@ const RecruiterSidebar = ({ activeSection, setActiveSection, isSidebarOpen, setI
     { id: 'profile', label: 'Profile', icon: icons.profile },
     { id: 'applications', label: 'Applications', icon: icons.applications },
     { id: 'postJob', label: 'Post Job', icon: icons.postJob },
+    { id: 'statistics', label: 'Placement Statistics', icon: icons.statistics }, // NEW MENU ITEM
   ];
 
   return (

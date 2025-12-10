@@ -1,7 +1,16 @@
 import { useEffect, useRef } from 'react';
 
-const ApplicationQuickView = ({ application, isOpen, onClose }) => {
+const ApplicationQuickView = ({ application, isOpen, onClose, updateApplicationStatus }) => {
   const slideOverRef = useRef(null);
+
+  const handleStatusUpdate = async (newStatus) => {
+    try {
+      await updateApplicationStatus(application._id, newStatus);
+      onClose(); // Close the modal after updating
+    } catch (error) {
+      console.error('Failed to update status:', error);
+    }
+  };
 
   useEffect(() => {
     const handleEscape = (e) => {
@@ -176,10 +185,36 @@ const ApplicationQuickView = ({ application, isOpen, onClose }) => {
             </div>
 
             {/* Footer */}
-            <div className="flex-shrink-0 px-4 py-4 border-t border-gray-200">
+            <div className="flex-shrink-0 px-4 py-4 border-t border-gray-200 space-y-3">
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => handleStatusUpdate('accepted')}
+                  disabled={application?.status === 'accepted'}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                    application?.status === 'accepted'
+                      ? 'bg-green-600 text-white cursor-not-allowed'
+                      : 'bg-green-100 text-green-800 hover:bg-green-200'
+                  }`}
+                >
+                  {application?.status === 'accepted' ? '✓ Accepted' : 'Accept Application'}
+                </button>
+                
+                <button
+                  onClick={() => handleStatusUpdate('rejected')}
+                  disabled={application?.status === 'rejected'}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                    application?.status === 'rejected'
+                      ? 'bg-red-600 text-white cursor-not-allowed'
+                      : 'bg-red-100 text-red-800 hover:bg-red-200'
+                  }`}
+                >
+                  {application?.status === 'rejected' ? '✗ Rejected' : 'Reject Application'}
+                </button>
+              </div>
+              
               <button
                 onClick={onClose}
-                className="w-full bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
+                className="w-full py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
               >
                 Close
               </button>

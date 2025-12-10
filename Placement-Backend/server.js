@@ -112,6 +112,8 @@ app.use('/api/students', require('./routes/students'));
 app.use('/api/recruiters', require('./routes/recruiters'));
 app.use('/api/jobs', require('./routes/jobs'));
 app.use('/api/applications', require('./routes/applications'));
+const statsRoutes = require('./routes/statistics');
+app.use('/api/stats', statsRoutes);
 
 // ========================
 // HEALTH CHECK & ROOT
