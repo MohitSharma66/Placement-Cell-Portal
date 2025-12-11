@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import clgImg from '../assets/ClgImg.jpeg';
 import logo from '../assets/logo.png';
@@ -10,20 +10,59 @@ const Register = () => {
   const [name, setName] = useState('');
   const [role, setRole] = useState('student');
   const [error, setError] = useState('');
+  const [emailWarning, setEmailWarning] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
 
+  // Define allowed domains
+  const COLLEGE_DOMAIN = 'iiitnr.edu.in';
+  const ALLOWED_DOMAINS = [COLLEGE_DOMAIN];
+
+  // Validate email domain on change
+  useEffect(() => {
+    if (email && email.includes('@')) {
+      const domain = email.split('@')[1];
+      
+      if (!ALLOWED_DOMAINS.includes(domain)) {
+        if (role === 'student') {
+          setEmailWarning(`⚠️ Students must use @${COLLEGE_DOMAIN} email`);
+        } else if (role === 'recruiter') {
+          setEmailWarning(`⚠️ Recruiters must use @${COLLEGE_DOMAIN} email`);
+        }
+      } else {
+        setEmailWarning('');
+      }
+    } else {
+      setEmailWarning('');
+    }
+  }, [email, role]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setEmailWarning('');
 
+    // Client-side validation
     if (!name.trim()) {
       setError('Name is required');
       return;
     }
+    
     if (password.length < 6) {
       setError('Password must be at least 6 characters');
+      return;
+    }
+
+    // Email domain validation
+    if (!email.includes('@')) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
+    const domain = email.split('@')[1];
+    if (!ALLOWED_DOMAINS.includes(domain)) {
+      setError(`Only @${COLLEGE_DOMAIN} emails are allowed for registration`);
       return;
     }
 
@@ -74,7 +113,7 @@ const Register = () => {
             {/* Role Selection */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Role
+                Register As
               </label>
               <select 
                 value={role} 
@@ -84,18 +123,24 @@ const Register = () => {
                 <option value="student">Student</option>
                 <option value="recruiter">Recruiter</option>
               </select>
+              <p className="mt-2 text-xs text-gray-500">
+                {role === 'student' 
+                  ? `Students: Use your official @${COLLEGE_DOMAIN} email`
+                  : `Recruiters: Must be approved by placement cell to register`
+                }
+              </p>
             </div>
 
             {/* Name Input */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Name
+                Full Name
               </label>
               <input
                 type="text"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Enter your name"
+                onChange={(e) => setName(e.target.value.trim())}
+                placeholder={role === 'student' ? "Your name as per college records" : "Company representative name"}
                 className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 required
               />
@@ -104,16 +149,24 @@ const Register = () => {
             {/* Email Input */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email
+                College Email Address
               </label>
               <input
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
-                className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                onChange={(e) => setEmail(e.target.value.trim())}
+                placeholder={`name@${COLLEGE_DOMAIN}`}
+                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
+                  emailWarning ? 'border-amber-300 bg-amber-50' : 'border-gray-300 bg-white'
+                }`}
                 required
               />
+              {emailWarning && (
+                <p className="mt-2 text-sm text-amber-600">{emailWarning}</p>
+              )}
+              <p className="mt-2 text-xs text-gray-500">
+                Only @{COLLEGE_DOMAIN} emails are accepted
+              </p>
             </div>
 
             {/* Password Input */}
@@ -125,27 +178,84 @@ const Register = () => {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
+                placeholder="Minimum 6 characters"
                 className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 required
               />
+              <p className="mt-2 text-xs text-gray-500">
+                Use a strong password with letters, numbers, and symbols
+              </p>
+            </div>
+
+            {/* Domain Restriction Notice */}
+            <div className="p-4 bg-blue-50 border border-blue-100 rounded-lg">
+              <h4 className="font-medium text-blue-800 text-sm mb-1">
+                📋 Registration Guidelines
+              </h4>
+              <ul className="text-xs text-blue-700 space-y-1">
+                <li>• Only <strong>@{COLLEGE_DOMAIN}</strong> emails can register</li>
+                <li>• Students: Use your official college email address</li>
+                <li>• Recruiters: Must contact placement cell for approval</li>
+                <li>• Your name should match college records</li>
+              </ul>
             </div>
 
             {/* Error Message */}
             {error && (
               <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-sm text-red-800">{error}</p>
+                <div className="flex items-start">
+                  <span className="text-red-500 mr-2">⚠</span>
+                  <div>
+                    <p className="text-sm font-medium text-red-800">Registration Failed</p>
+                    <p className="text-sm text-red-700 mt-1">{error}</p>
+                    {error.includes(COLLEGE_DOMAIN) && (
+                      <div className="mt-2 text-xs text-red-600">
+                        <p>Make sure:</p>
+                        <ul className="list-disc pl-4 mt-1 space-y-1">
+                          <li>You're using your @{COLLEGE_DOMAIN} email</li>
+                          <li>The email format is correct (name@{COLLEGE_DOMAIN})</li>
+                          <li>Contact placement cell if your email doesn't work</li>
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 
             {/* Submit Button */}
             <button 
               type="submit" 
-              disabled={isLoading}
-              className="w-full bg-blue-600 text-white font-semibold py-3 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isLoading || emailWarning}
+              className={`w-full font-semibold py-3 rounded-lg focus:outline-none focus:ring-4 transition-all ${
+                emailWarning || isLoading
+                  ? 'bg-gray-400 text-gray-700 cursor-not-allowed'
+                  : 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-200'
+              }`}
             >
-              {isLoading ? 'Creating Account...' : 'Register'}
+              {isLoading ? (
+                <span className="flex items-center justify-center">
+                  <svg className="animate-spin h-5 w-5 mr-3 text-white" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                  </svg>
+                  Creating Account...
+                </span>
+              ) : (
+                'Create Account'
+              )}
             </button>
+
+            {/* Terms Notice */}
+            <div className="text-center">
+              <p className="text-xs text-gray-500">
+                By registering, you agree to our{' '}
+                <Link to="/terms" className="text-blue-600 hover:underline">
+                  Terms of Service
+                </Link>{' '}
+                and acknowledge that your data will be used for placement purposes.
+              </p>
+            </div>
           </form>
 
           {/* Login Link */}

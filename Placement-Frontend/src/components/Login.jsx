@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import clgImg from '../assets/ClgImg.jpeg';
 import logo from '../assets/logo.png';
@@ -10,12 +10,48 @@ const Login = () => {
   const [role, setRole] = useState('student');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [emailWarning, setEmailWarning] = useState('');
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  // Define allowed domains
+  const COLLEGE_DOMAIN = 'iiitnr.edu.in';
+  const ALLOWED_DOMAINS = [COLLEGE_DOMAIN];
+
+  // Validate email domain on change
+  useEffect(() => {
+    if (email && email.includes('@')) {
+      const domain = email.split('@')[1];
+      
+      if (!ALLOWED_DOMAINS.includes(domain)) {
+        if (role === 'student') {
+          setEmailWarning(`⚠️ Students must use @${COLLEGE_DOMAIN} email`);
+        } else if (role === 'recruiter') {
+          setEmailWarning(`⚠️ Recruiters must use @${COLLEGE_DOMAIN} email`);
+        }
+      } else {
+        setEmailWarning('');
+      }
+    } else {
+      setEmailWarning('');
+    }
+  }, [email, role]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setEmailWarning('');
+    
+    // Client-side domain validation
+    if (email && email.includes('@')) {
+      const domain = email.split('@')[1];
+      
+      if (!ALLOWED_DOMAINS.includes(domain)) {
+        setError(`Only @${COLLEGE_DOMAIN} emails are allowed`);
+        return;
+      }
+    }
+    
     setIsLoading(true);
     
     const { success, user, msg } = await login(email, password, role);
@@ -64,7 +100,7 @@ const Login = () => {
             {/* Role Selection */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Role
+                Login As
               </label>
               <select 
                 value={role} 
@@ -74,21 +110,35 @@ const Login = () => {
                 <option value="student">Student</option>
                 <option value="recruiter">Recruiter</option>
               </select>
+              <p className="mt-2 text-xs text-gray-500">
+                {role === 'student' 
+                  ? `Students: Use your @${COLLEGE_DOMAIN} email`
+                  : `Recruiters: Use your @${COLLEGE_DOMAIN} email (placement cell approved)`
+                }
+              </p>
             </div>
 
             {/* Email Input */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email
+                College Email Address
               </label>
               <input
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
-                className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                onChange={(e) => setEmail(e.target.value.trim())}
+                placeholder={`your.name@${COLLEGE_DOMAIN}`}
+                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
+                  emailWarning ? 'border-amber-300 bg-amber-50' : 'border-gray-300 bg-white'
+                }`}
                 required
               />
+              {emailWarning && (
+                <p className="mt-2 text-sm text-amber-600">{emailWarning}</p>
+              )}
+              <p className="mt-2 text-xs text-gray-500">
+                Only @{COLLEGE_DOMAIN} emails are accepted
+              </p>
             </div>
 
             {/* Password Input */}
@@ -106,38 +156,87 @@ const Login = () => {
               />
             </div>
 
+            {/* Domain Info Box */}
+            <div className="p-4 bg-blue-50 border border-blue-100 rounded-lg">
+              <h4 className="font-medium text-blue-800 text-sm mb-1">
+                🔒 Domain Restriction Notice
+              </h4>
+              <p className="text-xs text-blue-700">
+                This portal is restricted to <strong>@{COLLEGE_DOMAIN}</strong> emails only.
+                {role === 'recruiter' && ' Recruiters must be approved by the placement cell.'}
+              </p>
+            </div>
+
             {/* Error Message */}
             {error && (
               <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-sm text-red-800">{error}</p>
+                <div className="flex items-start">
+                  <span className="text-red-500 mr-2">⚠</span>
+                  <div>
+                    <p className="text-sm font-medium text-red-800">Login Failed</p>
+                    <p className="text-sm text-red-700 mt-1">{error}</p>
+                    {error.includes(COLLEGE_DOMAIN) && (
+                      <p className="text-xs text-red-600 mt-2">
+                        Make sure you're using your college email address
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 
             {/* Submit Button */}
             <button 
               type="submit" 
-              disabled={isLoading}
-              className="w-full bg-blue-600 text-white font-semibold py-3 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isLoading || emailWarning}
+              className={`w-full font-semibold py-3 rounded-lg focus:outline-none focus:ring-4 transition-all ${
+                emailWarning || isLoading
+                  ? 'bg-gray-400 text-gray-700 cursor-not-allowed'
+                  : 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-200'
+              }`}
             >
-              {isLoading ? 'Logging in...' : 'Login'}
+              {isLoading ? (
+                <span className="flex items-center justify-center">
+                  <svg className="animate-spin h-5 w-5 mr-3 text-white" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                  </svg>
+                  Logging in...
+                </span>
+              ) : (
+                'Login to Portal'
+              )}
             </button>
           </form>
 
-          {/* Register Link */}
-          <div className="px-8 pb-8 text-center">
-            <p className="text-sm text-gray-600">
-              Don't have an account?{' '}
-              <Link 
-                to="/register" 
-                className="font-medium text-blue-600 hover:text-blue-700 hover:underline"
-              >
-                Register here
-              </Link>
-            </p>
+          {/* Register Link & Help */}
+          <div className="px-8 pb-8">
+            <div className="text-center mb-4">
+              <p className="text-sm text-gray-600">
+                Don't have an account?{' '}
+                <Link 
+                  to="/register" 
+                  className="font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                >
+                  Register here
+                </Link>
+              </p>
+            </div>
+            
+            {/* Help Section */}
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-xs text-gray-500 text-center">
+                Having trouble logging in?{' '}
+                <span className="font-medium text-gray-700">
+                  Contact placement cell for email verification
+                </span>
+              </p>
+            </div>
           </div>
         </div>
       </div>
 
+      {/* Style for animation */}
       <style jsx>{`
         @keyframes fadeIn {
           from {

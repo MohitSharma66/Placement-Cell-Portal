@@ -3,12 +3,12 @@ const express = require('express');
 const { auth } = require('../middleware/auth');
 const User = require('../models/User');
 const Resume = require('../models/Resume');
-const { getAuthUrl, setToken, uploadResumeToDrive, loadToken } = require('../utils/driveOAuth');
+const { uploadResumeToDrive, getDriveService, testDriveConnection } = require('../utils/driveOAuth'); // Updated imports
 const multer = require('multer');
 const router = express.Router();
 const ResumeAnalyzer = require('../utils/resumeAnalyzer');
 const PDFParser = require('../utils/pdfParser');
-const { saveAnalysisToDrive } = require('../utils/driveOAuth'); // ADD THIS
+const { saveAnalysisToDrive } = require('../utils/driveOAuth');
 
 // Configure multer for file uploads
 const upload = multer({
@@ -18,44 +18,23 @@ const upload = multer({
   },
   fileFilter: (req, file, cb) => {
     // Check file type
-    const allowedMimes = ['application/pdf'];
+    const allowedMimes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
     if (allowedMimes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only PDF files are allowed.'), false);
+      cb(new Error('Invalid file type. Only PDF, DOC, and DOCX files are allowed.'), false);
     }
   }
 });
 
-// OAuth 2.0 Authentication Routes
-router.get('/auth/google', (req, res) => {
-  getAuthUrl().then(url => res.json({ authUrl: url })).catch(err => {
-    console.error('Error in getAuthUrl:', err);
-    res.status(500).send('Internal server error: ' + err.message);
-  });
-});
-
-router.get('/auth/callback', async (req, res) => {
-  if (!req.query.code) {
-    return res.status(400).json({ msg: 'No authorization code provided' });
-  }
+// Test Shared Drive connection (for debugging)
+router.get('/test-drive', auth, async (req, res) => {
   try {
-    await setToken(req.query.code);
-    res.json({ msg: 'Authentication successful!' });
+    const result = await testDriveConnection();
+    res.json(result);
   } catch (err) {
-    console.error('Authentication error:', err);
-    res.status(500).json({ msg: 'Authentication failed: ' + err.message });
-  }
-});
-
-// Check authentication status
-router.get('/auth/status', async (req, res) => {
-  await loadToken();
-  const { oauth2Client } = require('../utils/driveOAuth');
-  if (oauth2Client.credentials && oauth2Client.credentials.access_token) {
-    res.json({ authenticated: true });
-  } else {
-    res.json({ authenticated: false });
+    console.error('Drive test error:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -74,10 +53,10 @@ router.put('/profile', auth, async (req, res) => {
     const user = await User.findByIdAndUpdate(
       req.user.id, 
       { 
-        cgpa: parseFloat(cgpa), 
-        branch,
-        tenthScore: parseFloat(tenthScore),
-        twelfthScore: parseFloat(twelfthScore)
+        cgpa: parseFloat(cgpa) || null, 
+        branch: branch || '',
+        tenthScore: parseFloat(tenthScore) || null,
+        twelfthScore: parseFloat(twelfthScore) || null
       }, 
       { new: true }
     ).select('-password');
@@ -88,36 +67,64 @@ router.put('/profile', auth, async (req, res) => {
   }
 });
 
-// Upload resume
-// Upload resume - UPDATED WITH RESUME ANALYSIS
-router.post('/resumes', auth, upload.single('resume'), async (req, res) => {
-  if (req.user.role !== 'student') return res.status(403).json({ msg: 'Access denied' });
+// Upload resume - SIMPLIFIED VERSION (NO OAuth for users)
+router.post('/upload-resume', auth, upload.single('resume'), async (req, res) => {
+  if (req.user.role !== 'student') {
+    return res.status(403).json({ msg: 'Access denied' });
+  }
+
+  if (!req.file) {
+    return res.status(400).json({ msg: 'No file uploaded' });
+  }
 
   try {
-    const { title } = req.body;
-    if (!req.file || !title) return res.status(400).json({ msg: 'Resume file and title are required' });
+    const student = await User.findById(req.user.id);
+    
+    // Get title from request or use default
+    const title = req.body.title || `${student.name}'s Resume`;
+    
+    // Upload to Shared Drive using service account
+    const uploadResult = await uploadResumeToDrive(
+      req.file.buffer,
+      req.file.originalname,
+      student._id.toString(),
+      student.name,
+      student.branch || 'General'
+    );
 
-    const user = await User.findById(req.user.id);
-    const uploadResult = await uploadResumeToDrive(req.file.buffer, req.file.originalname, req.user.id, user.name);
     if (!uploadResult.success) {
-      return res.status(500).json({ msg: 'Failed to upload resume to Google Drive' });
+      return res.status(500).json({ 
+        msg: 'Failed to upload resume to Shared Drive',
+        error: uploadResult.error 
+      });
     }
 
+    // Create resume record in database
     const resume = new Resume({
-      studentId: req.user.id,
-      googleDriveLink: uploadResult.link,
-      title,
+      studentId: student._id,
+      title: title,
+      fileName: req.file.originalname,
+      googleDriveLink: uploadResult.viewLink,
+      fileId: uploadResult.fileId,
+      folderPath: uploadResult.folderPath,
+      mimeType: req.file.mimetype,
+      fileSize: req.file.size,
+      uploadedAt: new Date()
     });
-
-    await resume.save();
 
     // RESUME ANALYSIS - ADD THIS SECTION
     try {
       const pdfParser = new PDFParser();
       const resumeAnalyzer = new ResumeAnalyzer();
       
-      // Extract text from PDF
-      const resumeText = await pdfParser.extractText(req.file.buffer);
+      // Extract text from PDF (only if PDF)
+      let resumeText = '';
+      if (req.file.mimetype === 'application/pdf') {
+        resumeText = await pdfParser.extractText(req.file.buffer);
+      } else {
+        // For DOC/DOCX, you might need different parsing
+        resumeText = `[Text extraction not available for ${req.file.mimetype} files]`;
+      }
       
       // Analyze resume
       const analysis = await resumeAnalyzer.analyze(resumeText);
@@ -127,30 +134,122 @@ router.post('/resumes', auth, upload.single('resume'), async (req, res) => {
       
       // Also save analysis in database for quick access
       resume.skillAnalysis = analysis;
-      await resume.save();
       
-      console.log(`Resume analysis completed for: ${title}`);
+      console.log(`✅ Resume analysis completed for: ${student.name}`);
     } catch (analysisError) {
-      console.error('Resume analysis failed (non-critical):', analysisError);
+      console.error('⚠️ Resume analysis failed (non-critical):', analysisError.message);
       // Don't fail the upload if analysis fails
     }
 
-    res.json(resume);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: 'Server error' });
+    await resume.save();
+
+    res.json({
+      success: true,
+      message: 'Resume uploaded successfully to Shared Drive',
+      resume: {
+        id: resume._id,
+        title: resume.title,
+        fileName: resume.fileName,
+        viewLink: resume.googleDriveLink,
+        folderPath: resume.folderPath,
+        uploadedAt: resume.uploadedAt,
+        analysis: resume.skillAnalysis || null
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Resume upload error:', error);
+    res.status(500).json({ 
+      msg: 'Failed to upload resume',
+      error: error.message 
+    });
   }
 });
 
-// Get resumes
+// Get all resumes for the student
 router.get('/resumes', auth, async (req, res) => {
   if (req.user.role !== 'student') return res.status(403).json({ msg: 'Access denied' });
 
   try {
-    const resumes = await Resume.find({ studentId: req.user.id }).sort({ uploadedAt: -1 });
+    const resumes = await Resume.find({ studentId: req.user.id })
+      .sort({ uploadedAt: -1 })
+      .select('_id title fileName googleDriveLink folderPath uploadedAt skillAnalysis');
+    
     res.json(resumes);
   } catch (err) {
-    console.error(err);
+    console.error('❌ Error fetching resumes:', err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+});
+
+// Get single resume by ID
+router.get('/resumes/:id', auth, async (req, res) => {
+  if (req.user.role !== 'student') return res.status(403).json({ msg: 'Access denied' });
+
+  try {
+    const resume = await Resume.findOne({ 
+      _id: req.params.id, 
+      studentId: req.user.id 
+    });
+    
+    if (!resume) {
+      return res.status(404).json({ msg: 'Resume not found' });
+    }
+    
+    res.json(resume);
+  } catch (err) {
+    console.error('❌ Error fetching resume:', err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+});
+
+// Delete resume
+router.delete('/resumes/:id', auth, async (req, res) => {
+  if (req.user.role !== 'student') return res.status(403).json({ msg: 'Access denied' });
+
+  try {
+    const resume = await Resume.findOne({ 
+      _id: req.params.id, 
+      studentId: req.user.id 
+    });
+    
+    if (!resume) {
+      return res.status(404).json({ msg: 'Resume not found' });
+    }
+    
+    // TODO: Optionally delete from Google Drive too
+    await resume.deleteOne();
+    
+    res.json({ 
+      success: true, 
+      message: 'Resume deleted successfully' 
+    });
+  } catch (err) {
+    console.error('❌ Error deleting resume:', err);
+    res.status(500).json({ msg: 'Server error' });
+  }
+});
+
+// Get resume analysis
+router.get('/resumes/:id/analysis', auth, async (req, res) => {
+  if (req.user.role !== 'student') return res.status(403).json({ msg: 'Access denied' });
+
+  try {
+    const resume = await Resume.findOne({ 
+      _id: req.params.id, 
+      studentId: req.user.id 
+    }).select('skillAnalysis');
+    
+    if (!resume) {
+      return res.status(404).json({ msg: 'Resume not found' });
+    }
+    
+    res.json({
+      analysis: resume.skillAnalysis || {},
+      hasAnalysis: !!resume.skillAnalysis
+    });
+  } catch (err) {
+    console.error('❌ Error fetching analysis:', err);
     res.status(500).json({ msg: 'Server error' });
   }
 });
