@@ -1,130 +1,65 @@
-const { google } = require('googleapis');
 const fs = require('fs');
 const path = require('path');
-const { Readable } = require('stream');
 const dotenv = require('dotenv');
 
 dotenv.config();
 
-// Initialize Google Auth with Service Account
-const auth = new google.auth.GoogleAuth({
-  keyFile: process.env.GOOGLE_SHEETS_CREDENTIALS_PATH, // Path to your service account JSON
-  scopes: ['https://www.googleapis.com/auth/drive']
-});
+// Configuration for local storage
+const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads/resumes';
 
-// Global Drive instance
-let driveService = null;
-
-// Initialize Drive Service
-async function getDriveService() {
-  if (!driveService) {
-    const authClient = await auth.getClient();
-    driveService = google.drive({
-      version: 'v3',
-      auth: authClient
-    });
-    console.log('✅ Drive service initialized with service account');
-  }
-  return driveService;
+// Ensure upload directory exists
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+  console.log(`📁 Created upload directory: ${UPLOAD_DIR}`);
 }
 
-// Upload resume directly to Shared Drive
-async function uploadResumeToDrive(fileBuffer, fileName, studentId, studentName, branch = 'Unknown') {
+// Save resume to local server storage
+async function uploadResumeToLocal(fileBuffer, fileName, studentId, studentName, branch = 'Unknown') {
   try {
-    const drive = await getDriveService();
-    
     // Generate folder path based on academic year and branch
     const currentYear = new Date().getFullYear();
     const academicYear = `${currentYear}-${currentYear + 1}`;
     
-    // Create folder structure: SharedDrive/AcademicYear/Branch/StudentName_Id/
-    const rootFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
-    const yearFolderId = await getOrCreateFolder(drive, academicYear, rootFolderId);
-    const branchFolderId = await getOrCreateFolder(drive, branch, yearFolderId);
-    const studentFolderId = await getOrCreateFolder(drive, `${studentName}_${studentId}`, branchFolderId);
+    // Create folder structure: AcademicYear/Branch/StudentName_Id/
+    const yearPath = path.join(UPLOAD_DIR, academicYear);
+    const branchPath = path.join(yearPath, branch);
+    const studentPath = path.join(branchPath, `${studentName}_${studentId}`);
+    
+    // Create directories if they don't exist
+    [yearPath, branchPath, studentPath].forEach(dir => {
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+    });
     
     // Clean filename
     const cleanFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
     const finalFileName = `${studentName}_Resume_${cleanFileName}`;
+    const filePath = path.join(studentPath, finalFileName);
     
-    // Prepare file metadata
-    const fileMetadata = {
-      name: finalFileName,
-      parents: [studentFolderId],
-      supportsAllDrives: true  // IMPORTANT for Shared Drives
-    };
-
-    // Convert buffer to stream
-    const bufferStream = new Readable();
-    bufferStream.push(fileBuffer);
-    bufferStream.push(null);
-
-    // Upload file
-    const response = await drive.files.create({
-      resource: fileMetadata,
-      media: {
-        mimeType: getMimeType(fileName),
-        body: bufferStream,
-      },
-      supportsAllDrives: true,  // IMPORTANT for Shared Drives
-      fields: 'id, name, webViewLink, webContentLink',
-    });
-
-    console.log(`✅ Resume uploaded for ${studentName}: ${response.data.name}`);
+    // Save file to disk
+    fs.writeFileSync(filePath, fileBuffer);
+    
+    console.log(`✅ Resume saved locally for ${studentName}: ${finalFileName}`);
+    console.log(`📁 Location: ${filePath}`);
+    
+    // Generate URL path for recruiter access
+    const relativePath = path.relative(UPLOAD_DIR, filePath);
+    const fileUrl = `/api/resumes/${encodeURIComponent(relativePath)}`;
     
     return {
       success: true,
-      fileId: response.data.id,
-      fileName: response.data.name,
-      viewLink: response.data.webViewLink,
-      downloadLink: response.data.webContentLink,
-      folderPath: `${academicYear}/${branch}/${studentName}_${studentId}`
+      filePath: filePath,
+      fileName: finalFileName,
+      viewLink: fileUrl,
+      downloadLink: fileUrl,
+      folderPath: `${academicYear}/${branch}/${studentName}_${studentId}`,
+      storageType: 'local'
     };
     
   } catch (error) {
-    console.error('❌ Error uploading resume to Shared Drive:', error.message);
-    throw new Error(`Failed to upload resume: ${error.message}`);
-  }
-}
-
-// Helper: Get or create folder in Shared Drive
-async function getOrCreateFolder(drive, folderName, parentFolderId) {
-  try {
-    // Search for existing folder
-    const query = `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and '${parentFolderId}' in parents and trashed=false`;
-    const response = await drive.files.list({
-      q: query,
-      supportsAllDrives: true,
-      includeItemsFromAllDrives: true,
-      fields: 'files(id, name)',
-      corpora: 'drive',
-      driveId: process.env.GOOGLE_DRIVE_FOLDER_ID
-    });
-
-    if (response.data.files.length > 0) {
-      return response.data.files[0].id;
-    }
-
-    // Create new folder
-    const folderMetadata = {
-      name: folderName,
-      mimeType: 'application/vnd.google-apps.folder',
-      parents: [parentFolderId],
-      supportsAllDrives: true
-    };
-
-    const folder = await drive.files.create({
-      resource: folderMetadata,
-      supportsAllDrives: true,
-      fields: 'id'
-    });
-
-    console.log(`📁 Created folder: ${folderName}`);
-    return folder.data.id;
-    
-  } catch (error) {
-    console.error(`❌ Error creating folder ${folderName}:`, error.message);
-    throw error;
+    console.error('❌ Error saving resume locally:', error.message);
+    throw new Error(`Failed to save resume: ${error.message}`);
   }
 }
 
@@ -144,63 +79,34 @@ function getMimeType(filename) {
   return mimeTypes[ext] || 'application/octet-stream';
 }
 
-// Create analysis folder (kept for compatibility)
+// Create analysis folder (local version)
 async function createAnalysisFolder() {
   try {
-    const drive = await getDriveService();
-    const sharedDriveId = process.env.GOOGLE_DRIVE_FOLDER_ID;
-    
-    const folderMetadata = {
-      name: 'Resume-Analysis',
-      mimeType: 'application/vnd.google-apps.folder',
-      parents: [sharedDriveId],
-      supportsAllDrives: true
-    };
-
-    const folder = await drive.files.create({
-      resource: folderMetadata,
-      supportsAllDrives: true,
-      fields: 'id'
-    });
-
-    console.log('✅ Created analysis folder:', folder.data.id);
-    return folder.data.id;
-    
+    const analysisPath = path.join(UPLOAD_DIR, 'Resume-Analysis');
+    if (!fs.existsSync(analysisPath)) {
+      fs.mkdirSync(analysisPath, { recursive: true });
+      console.log('✅ Created analysis folder:', analysisPath);
+    }
+    return analysisPath;
   } catch (error) {
     console.error('❌ Error creating analysis folder:', error.message);
     throw error;
   }
 }
 
-// Save analysis JSON to Drive (simplified version)
-async function saveAnalysisToDrive(resumeId, analysis) {
+// Save analysis JSON locally
+async function saveAnalysisToLocal(resumeId, analysis) {
   try {
-    const drive = await getDriveService();
-    const analysisFolderId = await createAnalysisFolder();
+    const analysisPath = await createAnalysisFolder();
+    const filePath = path.join(analysisPath, `resume-${resumeId}-analysis.json`);
     
-    const fileMetadata = {
-      name: `resume-${resumeId}-analysis.json`,
-      parents: [analysisFolderId],
-      supportsAllDrives: true
-    };
+    fs.writeFileSync(filePath, JSON.stringify(analysis, null, 2));
     
-    const media = {
-      mimeType: 'application/json',
-      body: JSON.stringify(analysis, null, 2)
-    };
-    
-    const file = await drive.files.create({
-      resource: fileMetadata,
-      media: media,
-      supportsAllDrives: true,
-      fields: 'id, webViewLink'
-    });
-    
-    console.log(`✅ Analysis saved for resume ${resumeId}`);
+    console.log(`✅ Analysis saved locally for resume ${resumeId}`);
     return {
       success: true,
-      fileId: file.data.id,
-      link: file.data.webViewLink
+      filePath: filePath,
+      link: `/api/resumes/Resume-Analysis/resume-${resumeId}-analysis.json`
     };
   } catch (error) {
     console.error('❌ Error saving analysis:', error.message);
@@ -208,63 +114,85 @@ async function saveAnalysisToDrive(resumeId, analysis) {
   }
 }
 
-// Get analysis from Drive (simplified version)
-async function getAnalysisFromDrive(resumeId) {
+// Get analysis from local storage
+async function getAnalysisFromLocal(resumeId) {
   try {
-    const drive = await getDriveService();
-    const sharedDriveId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+    const analysisPath = path.join(UPLOAD_DIR, 'Resume-Analysis');
+    const filePath = path.join(analysisPath, `resume-${resumeId}-analysis.json`);
     
-    const query = `name='resume-${resumeId}-analysis.json' and '${sharedDriveId}' in parents and trashed=false`;
-    const response = await drive.files.list({
-      q: query,
-      supportsAllDrives: true,
-      includeItemsFromAllDrives: true,
-      fields: 'files(id, name)',
-      corpora: 'drive',
-      driveId: sharedDriveId
-    });
-
-    if (response.data.files.length === 0) {
+    if (!fs.existsSync(filePath)) {
       return null;
     }
-
-    const fileId = response.data.files[0].id;
-    const file = await drive.files.get({
-      fileId: fileId,
-      alt: 'media',
-      supportsAllDrives: true
-    });
-
-    return JSON.parse(file.data);
+    
+    const data = fs.readFileSync(filePath, 'utf8');
+    return JSON.parse(data);
   } catch (error) {
     console.error('❌ Error getting analysis:', error.message);
     return null;
   }
 }
 
-// Test connection to Shared Drive
-async function testDriveConnection() {
+// Test local storage connection
+async function testLocalStorageConnection() {
   try {
-    const drive = await getDriveService();
-    const sharedDriveId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+    // Check if we can write to upload directory
+    const testFile = path.join(UPLOAD_DIR, '.test-write');
+    fs.writeFileSync(testFile, 'test');
+    fs.unlinkSync(testFile);
     
-    const response = await drive.drives.get({
-      driveId: sharedDriveId
-    });
-    
-    console.log(`✅ Connected to Shared Drive: ${response.data.name}`);
-    return { success: true, driveName: response.data.name };
+    console.log(`✅ Local storage accessible: ${UPLOAD_DIR}`);
+    return { 
+      success: true, 
+      storageType: 'local',
+      uploadDir: UPLOAD_DIR 
+    };
   } catch (error) {
-    console.error('❌ Failed to connect to Shared Drive:', error.message);
+    console.error('❌ Failed to access local storage:', error.message);
     return { success: false, error: error.message };
   }
 }
 
+// Helper function to serve files to recruiters
+function serveResumeFile(req, res) {
+  try {
+    // Decode the file path from URL
+    const encodedPath = req.params[0] || '';
+    const filePath = decodeURIComponent(encodedPath);
+    const fullPath = path.join(UPLOAD_DIR, filePath);
+    
+    // Security check: prevent directory traversal
+    const resolvedPath = path.resolve(fullPath);
+    const uploadDirResolved = path.resolve(UPLOAD_DIR);
+    
+    if (!resolvedPath.startsWith(uploadDirResolved)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    if (!fs.existsSync(fullPath)) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    
+    // Set appropriate headers
+    const mimeType = getMimeType(fullPath);
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${path.basename(fullPath)}"`);
+    
+    // Stream the file
+    const fileStream = fs.createReadStream(fullPath);
+    fileStream.pipe(res);
+    
+  } catch (error) {
+    console.error('❌ Error serving file:', error.message);
+    res.status(500).json({ error: 'Failed to serve file' });
+  }
+}
+
 module.exports = { 
-  uploadResumeToDrive,
+  uploadResumeToDrive: uploadResumeToLocal, // Keep same function name for compatibility
   createAnalysisFolder, 
-  saveAnalysisToDrive, 
-  getAnalysisFromDrive,
-  getDriveService,
-  testDriveConnection
+  saveAnalysisToDrive: saveAnalysisToLocal, // Keep same function name
+  getAnalysisFromDrive: getAnalysisFromLocal, // Keep same function name
+  testDriveConnection: testLocalStorageConnection, // Keep same function name
+  serveResumeFile, // New function for serving files
+  getMimeType // Export for use in routes
 };

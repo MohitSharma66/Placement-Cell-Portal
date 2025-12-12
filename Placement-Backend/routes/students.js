@@ -3,12 +3,11 @@ const express = require('express');
 const { auth } = require('../middleware/auth');
 const User = require('../models/User');
 const Resume = require('../models/Resume');
-const { uploadResumeToDrive, getDriveService, testDriveConnection } = require('../utils/driveOAuth'); // Updated imports
+const { uploadResumeToDrive, getDriveService, testDriveConnection, saveAnalysisToDrive } = require('../utils/driveOAuth');
 const multer = require('multer');
 const router = express.Router();
 const ResumeAnalyzer = require('../utils/resumeAnalyzer');
 const PDFParser = require('../utils/pdfParser');
-const { saveAnalysisToDrive } = require('../utils/driveOAuth');
 
 // Configure multer for file uploads
 const upload = multer({
@@ -27,13 +26,16 @@ const upload = multer({
   }
 });
 
-// Test Shared Drive connection (for debugging)
+// Test storage connection
 router.get('/test-drive', auth, async (req, res) => {
   try {
     const result = await testDriveConnection();
-    res.json(result);
+    res.json({
+      ...result,
+      note: 'Using local file storage (Google Drive will be added when Shared Drive is available)'
+    });
   } catch (err) {
-    console.error('Drive test error:', err);
+    console.error('Storage test error:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -44,7 +46,7 @@ router.get('/profile', auth, async (req, res) => {
   res.json(req.user);
 });
 
-// Update profile - UPDATED WITH NEW FIELDS
+// Update profile
 router.put('/profile', auth, async (req, res) => {
   if (req.user.role !== 'student') return res.status(403).json({ msg: 'Access denied' });
 
@@ -67,7 +69,7 @@ router.put('/profile', auth, async (req, res) => {
   }
 });
 
-// Upload resume - SIMPLIFIED VERSION (NO OAuth for users)
+// Upload resume with local storage and analysis
 router.post('/upload-resume', auth, upload.single('resume'), async (req, res) => {
   if (req.user.role !== 'student') {
     return res.status(403).json({ msg: 'Access denied' });
@@ -83,7 +85,7 @@ router.post('/upload-resume', auth, upload.single('resume'), async (req, res) =>
     // Get title from request or use default
     const title = req.body.title || `${student.name}'s Resume`;
     
-    // Upload to Shared Drive using service account
+    // Upload to storage (local or Google Drive based on configuration)
     const uploadResult = await uploadResumeToDrive(
       req.file.buffer,
       req.file.originalname,
@@ -94,7 +96,7 @@ router.post('/upload-resume', auth, upload.single('resume'), async (req, res) =>
 
     if (!uploadResult.success) {
       return res.status(500).json({ 
-        msg: 'Failed to upload resume to Shared Drive',
+        msg: 'Failed to save resume',
         error: uploadResult.error 
       });
     }
@@ -105,14 +107,14 @@ router.post('/upload-resume', auth, upload.single('resume'), async (req, res) =>
       title: title,
       fileName: req.file.originalname,
       googleDriveLink: uploadResult.viewLink,
-      fileId: uploadResult.fileId,
+      fileId: uploadResult.fileId || uploadResult.filePath,
       folderPath: uploadResult.folderPath,
       mimeType: req.file.mimetype,
       fileSize: req.file.size,
       uploadedAt: new Date()
     });
 
-    // RESUME ANALYSIS - ADD THIS SECTION
+    // RESUME ANALYSIS
     try {
       const pdfParser = new PDFParser();
       const resumeAnalyzer = new ResumeAnalyzer();
@@ -129,7 +131,7 @@ router.post('/upload-resume', auth, upload.single('resume'), async (req, res) =>
       // Analyze resume
       const analysis = await resumeAnalyzer.analyze(resumeText);
       
-      // Save analysis to Drive
+      // Save analysis to storage
       await saveAnalysisToDrive(resume._id.toString(), analysis);
       
       // Also save analysis in database for quick access
@@ -145,7 +147,7 @@ router.post('/upload-resume', auth, upload.single('resume'), async (req, res) =>
 
     res.json({
       success: true,
-      message: 'Resume uploaded successfully to Shared Drive',
+      message: 'Resume uploaded successfully',
       resume: {
         id: resume._id,
         title: resume.title,
@@ -153,7 +155,10 @@ router.post('/upload-resume', auth, upload.single('resume'), async (req, res) =>
         viewLink: resume.googleDriveLink,
         folderPath: resume.folderPath,
         uploadedAt: resume.uploadedAt,
-        analysis: resume.skillAnalysis || null
+        analysis: resume.skillAnalysis || null,
+        storageType: uploadResult.storageType || 'local',
+        mimeType: resume.mimeType,
+        fileSize: resume.fileSize
       }
     });
 
@@ -173,9 +178,15 @@ router.get('/resumes', auth, async (req, res) => {
   try {
     const resumes = await Resume.find({ studentId: req.user.id })
       .sort({ uploadedAt: -1 })
-      .select('_id title fileName googleDriveLink folderPath uploadedAt skillAnalysis');
+      .select('_id title fileName googleDriveLink folderPath uploadedAt skillAnalysis mimeType fileSize');
     
-    res.json(resumes);
+    // Add storage type info to each resume
+    const resumesWithStorageInfo = resumes.map(resume => ({
+      ...resume.toObject(),
+      storageType: resume.googleDriveLink.startsWith('/api/resumes/') ? 'local' : 'drive'
+    }));
+    
+    res.json(resumesWithStorageInfo);
   } catch (err) {
     console.error('❌ Error fetching resumes:', err);
     res.status(500).json({ msg: 'Server error' });
@@ -217,7 +228,7 @@ router.delete('/resumes/:id', auth, async (req, res) => {
       return res.status(404).json({ msg: 'Resume not found' });
     }
     
-    // TODO: Optionally delete from Google Drive too
+    // TODO: Optionally delete from storage too (local or drive)
     await resume.deleteOne();
     
     res.json({ 

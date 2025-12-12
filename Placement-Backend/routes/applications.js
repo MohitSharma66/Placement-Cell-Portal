@@ -6,7 +6,7 @@ const Job = require('../models/Job');
 const User = require('../models/User');
 const Resume = require('../models/Resume');
 const { addApplicationToSheet, updateApplicationStatusInSheet } = require('../utils/googleSheets');
-const { getAnalysisFromDrive } = require('../utils/driveOAuth'); // ADD THIS IMPORT
+const { getAnalysisFromDrive } = require('../utils/driveOAuth');
 const router = express.Router();
 const dotenv = require('dotenv');
 dotenv.config();
@@ -27,7 +27,7 @@ async function getMatchingJobs(resumeId, allJobs) {
       );
     }
     
-    // If no analysis in database, try to get from Drive
+    // If no analysis in database, try to get from storage
     const analysis = await getAnalysisFromDrive(resumeId);
     
     if (analysis && analysis.bestRoles) {
@@ -49,7 +49,7 @@ async function getMatchingJobs(resumeId, allJobs) {
   }
 }
 
-// Get jobs filtered by resume analysis - ADD THIS NEW ROUTE
+// Get jobs filtered by resume analysis
 router.get('/jobs/:resumeId', authMiddleware.auth, async (req, res) => {
   if (req.user.role !== 'student') return res.status(403).json({ msg: 'Access denied' });
 
@@ -80,7 +80,7 @@ router.get('/jobs/:resumeId', authMiddleware.auth, async (req, res) => {
   }
 });
 
-// Apply to a job - UPDATED WITH CUSTOM ANSWERS
+// Apply to a job
 router.post('/', authMiddleware.auth, async (req, res) => {
   if (req.user.role !== 'student') return res.status(403).json({ msg: 'Access denied' });
 
@@ -166,16 +166,37 @@ router.get('/recruiters/:jobId', authMiddleware.auth, async (req, res) => {
 
     const applications = await Application.find({ jobId: req.params.jobId })
       .populate('studentId', 'name email cgpa branch tenthScore twelfthScore')
-      .populate('resumeId', 'title googleDriveLink')
+      .populate('resumeId', 'title googleDriveLink fileName')
       .populate('jobId', 'title');
-    res.json(applications);
+    
+    // Format response with proper resume URL
+    const formattedApplications = applications.map(app => {
+      const resume = app.resumeId;
+      let resumeUrl = resume.googleDriveLink;
+      
+      // If it's a local storage path (starts with /api/resumes/), keep as is
+      // If it's a Google Drive link from earlier, keep as is
+      // Add a note if using local storage
+      const storageNote = resume.googleDriveLink.startsWith('/api/resumes/') 
+        ? ' (Local Storage)' 
+        : ' (Google Drive)';
+      
+      return {
+        ...app.toObject(),
+        resumeUrl: resumeUrl,
+        resumeFileName: resume.fileName,
+        storageType: resume.googleDriveLink.startsWith('/api/resumes/') ? 'local' : 'drive'
+      };
+    });
+    
+    res.json(formattedApplications);
   } catch (err) {
     console.error('Server error:', err);
     res.status(500).json({ msg: 'Server error', error: err.message });
   }
 });
 
-// Get my applications (student) - UPDATED TO INCLUDE CUSTOM ANSWERS
+// Get my applications (student)
 router.get('/my', authMiddleware.auth, async (req, res) => {
   if (req.user.role !== 'student') return res.status(403).json({ msg: 'Access denied' });
 
@@ -190,8 +211,7 @@ router.get('/my', authMiddleware.auth, async (req, res) => {
   }
 });
 
-// Update application status (recruiter) - remains the same
-// Update application status (recruiter) - FIX THIS ROUTE
+// Update application status (recruiter)
 router.put('/:id/status', authMiddleware.auth, async (req, res) => {
   if (req.user.role !== 'recruiter') return res.status(403).json({ msg: 'Access denied' });
 
@@ -215,9 +235,8 @@ router.put('/:id/status', authMiddleware.auth, async (req, res) => {
     application.status = status;
     await application.save();
 
-    // Update status in Google Sheet - FIX THIS CALL
+    // Update status in Google Sheet
     try {
-      // Pass the application ID, NOT the appliedAt timestamp
       await updateApplicationStatusInSheet(application.appliedAt.toISOString(), status);
     } catch (sheetErr) {
       console.error('Google Sheets update error (non-critical):', sheetErr.message);
