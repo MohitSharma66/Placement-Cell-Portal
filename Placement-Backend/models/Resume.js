@@ -5,7 +5,7 @@ const resumeSchema = new mongoose.Schema({
   googleDriveLink: { type: String, required: true, trim: true },
   title: { type: String, required: true, trim: true, default: 'Resume' },
   uploadedAt: { type: Date, default: Date.now },
-  skillAnalysis: { type: mongoose.Schema.Types.Mixed }
+  skillAnalysis: { type: mongoose.Schema.Types.Mixed },
   fileName: { type: String, required: true }, // Added
   filePath: { type: String }, // Added for local storage path
   mimeType: { type: String }, // Added
