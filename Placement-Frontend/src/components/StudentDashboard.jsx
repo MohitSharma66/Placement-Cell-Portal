@@ -5,6 +5,8 @@ import JobApplyModal from './JobApplyModal';
 import Navbar from './Navbar';
 import StudentSidebar from './StudentSidebar';
 
+const baseURL = window.location.hostname === '172.16.61.184' ? '' : 'http://localhost:5000';
+
 const StudentDashboard = () => {
   const { user } = useAuth();
   const [profile, setProfile] = useState({ 
@@ -45,7 +47,7 @@ const StudentDashboard = () => {
 
   const checkAuthentication = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/students/auth/status', {
+      const res = await axios.get(`${baseURL}/api/students/auth/status`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       setIsAuthenticated(res.data.authenticated);
@@ -57,7 +59,7 @@ const StudentDashboard = () => {
 
   const loadFilteredJobs = async (resumeId) => {
     try {
-      const res = await axios.get(`http://localhost:5000/api/applications/jobs/${resumeId}`, {
+      const res = await axios.get(`${baseURL}/api/applications/jobs/${resumeId}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       setFilteredJobs(res.data.jobs);
@@ -82,7 +84,7 @@ const StudentDashboard = () => {
 
   const fetchProfile = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/students/profile', {
+      const res = await axios.get(`${baseURL}/api/students/profile`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       setProfile({ 
@@ -112,7 +114,7 @@ const StudentDashboard = () => {
         return;
       }
       
-      const res = await axios.put('http://localhost:5000/api/students/profile', { 
+      const res = await axios.put(`${baseURL}/api/students/profile`, { 
         ...profile, 
         cgpa: parseFloat(profile.cgpa) || undefined,
         tenthScore: parseFloat(profile.tenthScore) || undefined,
@@ -135,7 +137,7 @@ const StudentDashboard = () => {
 
   const fetchResumes = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/students/resumes', {
+      const res = await axios.get(`${baseURL}/api/students/resumes`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       setResumes(res.data);
@@ -180,7 +182,7 @@ const StudentDashboard = () => {
     formData.append('title', resumeTitle.trim());
     
     const response = await axios.post(
-      'http://localhost:5000/api/students/upload-resume', 
+      `${baseURL}/api/students/upload-resume`, 
       formData, 
       {
         headers: { 
@@ -216,7 +218,7 @@ const StudentDashboard = () => {
 
   const fetchJobs = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/jobs', {
+      const res = await axios.get(`${baseURL}/api/jobs`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       setJobs(res.data);
@@ -227,7 +229,7 @@ const StudentDashboard = () => {
 
   const fetchJobDetails = async (jobId) => {
     try {
-      const res = await axios.get(`http://localhost:5000/api/jobs/${jobId}`, {
+      const res = await axios.get(`${baseURL}/api/jobs/${jobId}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       setSelectedJobDetails(res.data);
@@ -247,7 +249,7 @@ const StudentDashboard = () => {
 
   const handleApplyToJob = async (jobId, resumeId, customAnswers) => {
     try {
-      await axios.post('http://localhost:5000/api/applications', { 
+      await axios.post(`${baseURL}/api/applications`, { 
         jobId, 
         resumeId,
         customAnswers
@@ -284,7 +286,7 @@ const StudentDashboard = () => {
         answer: answer.toString()
       }));
 
-      await axios.post('http://localhost:5000/api/applications', { 
+      await axios.post(`${baseURL}/api/applications`, { 
         jobId: selectedJob, 
         resumeId: selectedResume,
         customAnswers: customAnswersArray
@@ -307,7 +309,7 @@ const StudentDashboard = () => {
 
   const fetchApplications = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/applications/my', {
+      const res = await axios.get(`${baseURL}/api/applications/my`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       setApplications(res.data);

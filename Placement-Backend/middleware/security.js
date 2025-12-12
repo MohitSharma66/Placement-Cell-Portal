@@ -4,6 +4,11 @@ const rateLimit = require('express-rate-limit');
 const mongoSanitize = require('express-mongo-sanitize');
 const xss = require('xss-clean');
 const hpp = require('hpp');
+const express = require('express');
+
+// Server configuration
+const SERVER_PORT = process.env.PORT || 5000;
+const SERVER_IP = '172.16.61.184';
 
 // Rate limiting configuration
 const limiter = rateLimit({
@@ -24,16 +29,30 @@ const corsOptions = {
     
     const allowedOrigins = process.env.ALLOWED_ORIGINS ? 
       process.env.ALLOWED_ORIGINS.split(',') : 
-      ['http://localhost:3000'];
+      [
+        'http://localhost:5173',
+        'http://localhost:3000',
+        `http://${SERVER_IP}`,
+        `http://${SERVER_IP}:${SERVER_PORT}`,
+        `http://localhost:${SERVER_PORT}`
+      ];
+    
+    // For debugging
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`CORS check: ${origin} in [${allowedOrigins.join(', ')}]`);
+    }
     
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      console.log('CORS blocked for origin:', origin);
+      callback(new Error(`Not allowed by CORS. Allowed: ${allowedOrigins.join(', ')}`));
     }
   },
   credentials: true,
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 };
 
 // Security middleware setup
@@ -47,8 +66,8 @@ const securityMiddleware = (app) => {
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         imgSrc: ["'self'", "data:", "https:"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
-        connectSrc: ["'self'"]
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://apis.google.com"],
+        connectSrc: ["'self'", `http://${SERVER_IP}:${SERVER_PORT}`]
       }
     }
   }));
@@ -75,6 +94,11 @@ const securityMiddleware = (app) => {
       'minCgpa', 'branch', 'title', 'company', 'status'
     ]
   }));
+  
+  // Log security configuration
+  console.log('🔒 Security Middleware Loaded');
+  console.log(`   Server: ${SERVER_IP}:${SERVER_PORT}`);
+  console.log(`   CORS Origins: ${corsOptions.origin.toString().includes('function') ? 'Dynamic' : 'Fixed'}`);
 };
 
 module.exports = securityMiddleware;

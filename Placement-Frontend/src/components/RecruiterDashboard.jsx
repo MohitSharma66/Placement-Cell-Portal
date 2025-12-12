@@ -39,10 +39,12 @@ const RecruiterDashboard = () => {
     fetchJobs();
   }, []);
 
+  const baseURL = window.location.hostname === '172.16.61.184' ? '' : 'http://localhost:5000';
+
   const updateProfile = async (e) => {
     e.preventDefault();
     try {
-      await axios.put('http://localhost:5000/api/recruiters/profile', profile, {
+      await axios.put(`${baseURL}/api/recruiters/profile`, profile, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       setError('');
@@ -54,7 +56,7 @@ const RecruiterDashboard = () => {
 
   const fetchProfile = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/recruiters/profile', {
+      const res = await axios.get(`${baseURL}/api/recruiters/profile`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       setProfile({ company: res.data.company || '' });
@@ -65,7 +67,7 @@ const RecruiterDashboard = () => {
 
   const fetchJobs = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/jobs', {
+      const res = await axios.get(`${baseURL}/api/jobs`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       setJobs(res.data.filter(j => j.recruiterId._id === user.id));
@@ -139,7 +141,7 @@ const RecruiterDashboard = () => {
     };
     
     // Send POST request to create job
-    await axios.post('http://localhost:5000/api/jobs', jobData, {
+    await axios.post(`${baseURL}/api/jobs`, jobData, {
       headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
     });
     
@@ -177,7 +179,7 @@ setNewJob({
 
   const fetchApplicationsForJob = async (jobId) => {
     try {
-      const res = await axios.get(`http://localhost:5000/api/applications/recruiters/${jobId}`, {
+      const res = await axios.get(`${baseURL}/api/applications/recruiters/${jobId}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       setApplications(prev => ({ ...prev, [jobId]: res.data }));
@@ -188,7 +190,7 @@ setNewJob({
 
   const updateApplicationStatus = async (appId, status) => {
     try {
-      const res = await axios.put(`http://localhost:5000/api/applications/${appId}/status`, { status }, {
+      const res = await axios.put(`${baseURL}/api/applications/${appId}/status`, { status }, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       setApplications(prev => {

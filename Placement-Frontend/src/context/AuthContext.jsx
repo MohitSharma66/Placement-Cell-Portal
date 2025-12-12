@@ -3,6 +3,7 @@ import * as jwtDecode from 'jwt-decode';
 import { createContext, useContext, useEffect, useState } from 'react';
 
 const AuthContext = createContext();
+const baseURL = window.location.hostname === '172.16.61.184' ? '' : 'http://localhost:5000';
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
@@ -25,7 +26,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password, role) => {
     try {
-      const res = await axios.post('http://localhost:5000/api/auth/login', { email, password, role });
+      const res = await axios.post(`${baseURL}/api/auth/login`, { email, password, role });
       localStorage.setItem('token', res.data.token);
       setUser(res.data.user);
       axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
@@ -37,7 +38,7 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (email, password, role, name) => {
     try {
-      const res = await axios.post('http://localhost:5000/api/auth/register', { email, password, role, name });
+      const res = await axios.post(`${baseURL}/api/auth/register`, { email, password, role, name });
       localStorage.setItem('token', res.data.token);
       setUser(res.data.user);
       axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;

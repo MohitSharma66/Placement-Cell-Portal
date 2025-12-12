@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { useEffect, useState } from 'react';
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
+import config from '../config';
 import { useAuth } from '../context/AuthContext';
 
 const PlacementStatistics = () => {
@@ -17,9 +18,9 @@ const PlacementStatistics = () => {
     const fetchPlacementStats = async () => {
         try {
             setLoading(true);
-            const response = await axios.get('http://localhost:5000/api/stats/placements/stats', {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
+            const response = await axios.get(`${config.API_URL}/stats/placements/stats`, {
+            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+        });
             
             console.log('📊 Stats received:', response.data.data);
             setStatsData(response.data.data);
