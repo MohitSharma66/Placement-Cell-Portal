@@ -94,7 +94,7 @@ app.use(hpp({
 // DATABASE CONNECTION
 // ========================
 
-mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/placementdb', {
+mongoose.connect(process.env.MONGO_URI || 'mongodb://172.16.61.184:27017/placementdb', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 }).then(() => console.log('MongoDB connected securely'))
