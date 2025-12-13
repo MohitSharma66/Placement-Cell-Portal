@@ -16,8 +16,25 @@ async function getMatchingJobs(resumeId, student, allJobs) {
   try {
     // First filter jobs based on student eligibility (CGPA, branch)
     const eligibleJobs = allJobs.filter(job => {
-      if (job.minCgpa && student.cgpa < job.minCgpa) return false;
-      if (job.branch && job.branch !== 'Any' && student.branch !== job.branch) return false;
+      if (
+        job.minCgpa !== undefined &&
+        job.minCgpa !== null &&
+        student.cgpa < job.minCgpa
+      ) {
+        return false;
+      }
+
+      // Only check if job HAS a branch requirement
+      if (
+        job.branch &&
+        job.branch.trim() !== '' &&
+        job.branch.toLowerCase() !== 'any'
+      ) {
+        if (student.branch !== job.branch) {
+          return false;
+        }
+      }
+
       return true;
     });
 
@@ -26,48 +43,57 @@ async function getMatchingJobs(resumeId, student, allJobs) {
       return [];
     }
 
-    // Try to get analysis from database first (stored in resume)
+    // Try to get analysis from database first
     const resume = await Resume.findById(resumeId);
-    
+
     if (resume && resume.skillAnalysis && resume.skillAnalysis.bestRoles) {
       const bestRoles = resume.skillAnalysis.bestRoles;
-      
-      // Filter eligible jobs based on role matching
-      const matchingJobs = eligibleJobs.filter(job => 
-        job.suitableRoles && job.suitableRoles.some(role => 
-          bestRoles.includes(role)
-        )
+
+      const matchingJobs = eligibleJobs.filter(job =>
+        job.suitableRoles &&
+        job.suitableRoles.some(role => bestRoles.includes(role))
       );
-      
-      // Return matching jobs if any, otherwise return eligible jobs as fallback
+
       return matchingJobs.length > 0 ? matchingJobs : eligibleJobs;
     }
-    
-    // If no analysis in database, try to get from storage
+
+    // If no analysis in DB, try Drive
     const analysis = await getAnalysisFromDrive(resumeId);
-    
+
     if (analysis && analysis.bestRoles) {
-      // Filter eligible jobs based on role matching
-      const matchingJobs = eligibleJobs.filter(job => 
-        job.suitableRoles && job.suitableRoles.some(role => 
-          analysis.bestRoles.includes(role)
-        )
+      const matchingJobs = eligibleJobs.filter(job =>
+        job.suitableRoles &&
+        job.suitableRoles.some(role => analysis.bestRoles.includes(role))
       );
-      
-      // Return matching jobs if any, otherwise return eligible jobs as fallback
+
       return matchingJobs.length > 0 ? matchingJobs : eligibleJobs;
     }
-    
-    // If no analysis available, return eligible jobs (fallback)
+
+    // Fallback
     console.log(`No analysis found for resume ${resumeId}, showing all eligible jobs`);
     return eligibleJobs;
-    
+
   } catch (error) {
     console.error('Error in job matching:', error);
-    // On error, return empty array or optionally apply basic eligibility filtering
+
+    // Safe fallback
     return allJobs.filter(job => {
-      if (job.minCgpa && student.cgpa < job.minCgpa) return false;
-      if (job.branch && job.branch !== 'Any' && student.branch !== job.branch) return false;
+      if (
+        job.minCgpa !== undefined &&
+        job.minCgpa !== null &&
+        student.cgpa < job.minCgpa
+      ) {
+        return false;
+      }
+
+      if (
+        job.branch &&
+        job.branch !== 'Any' &&
+        student.branch !== job.branch
+      ) {
+        return false;
+      }
+
       return true;
     });
   }

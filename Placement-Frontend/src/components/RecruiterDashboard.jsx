@@ -127,12 +127,13 @@ const RecruiterDashboard = () => {
       lastDate: newJob.jobRequirements.lastDate ? new Date(newJob.jobRequirements.lastDate) : undefined
     };
 
-    // Prepare the main job data to be sent to backend
+    // Prepare the main job data - FIXED: Use jobRequirements values
     const jobData = {
       title: newJob.title,
       description: newJob.description,
-      minCgpa: parseFloat(newJob.minCgpa) || undefined,
-      branch: newJob.branch,
+      // FIX: Get values from jobRequirements, not empty top-level fields
+      minCgpa: newJob.jobRequirements.minCgpa ? parseFloat(newJob.jobRequirements.minCgpa) : undefined,
+      branch: newJob.jobRequirements.allowedBranches.join(', '), // Convert array to comma-separated string
       // CRITICAL: Send skills to 'requirements' field for role detection
       requirements: newJob.jobRequirements.skills,
       customQuestions: processedQuestions,
@@ -140,29 +141,28 @@ const RecruiterDashboard = () => {
       jobRequirements: processedJobRequirements
     };
     
+    console.log('📤 [FRONTEND] Sending job data:', jobData); // Add this log
+    
     // Send POST request to create job
     await axios.post(`${baseURL}/api/jobs`, jobData, {
       headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
     });
     
     // Reset form state on success
-    // Reset form state on success
-setNewJob({ 
-  title: '', 
-  description: '', 
-  minCgpa: '', 
-  branch: '', 
-  requirements: '',
-  skillInput: '', // Reset this too
-  jobRequirements: {
-    skills: [],
-    minCgpa: '',
-    minExperienceYears: '',
-    allowedBranches: [],
-    otherNotes: '',
-    lastDate: ''
-  }
-});
+    setNewJob({ 
+      title: '', 
+      description: '', 
+      requirements: '',
+      skillInput: '',
+      jobRequirements: {
+        skills: [],
+        minCgpa: '',
+        minExperienceYears: '',
+        allowedBranches: [],
+        otherNotes: '',
+        lastDate: ''
+      }
+    });
     setCustomQuestions([]);
     
     // Refresh jobs list and show success message

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 const JobApplyModal = ({ job, isOpen, onClose, onApply, resumes }) => {
-  const { user } = useAuth();
+  const { user: authUser } = useAuth();
+  const [user, setUser] = useState(authUser);
   const [selectedResume, setSelectedResume] = useState('');
   const [customAnswers, setCustomAnswers] = useState({});
   const [requirementsMet, setRequirementsMet] = useState({
@@ -11,51 +12,87 @@ const JobApplyModal = ({ job, isOpen, onClose, onApply, resumes }) => {
     skills: true
   });
   const [warnings, setWarnings] = useState([]);
-
+  const baseURL = window.location.hostname === '172.16.61.184' ? '' : 'http://localhost:5000';
   useEffect(() => {
     if (isOpen && job) {
-      checkRequirements();
+      fetchLatestUserData();
+      checkRequirementsWithUser(user);
       if (resumes.length > 0 && !selectedResume) {
         setSelectedResume(resumes[0]._id);
       }
     }
-  }, [isOpen, job, user]);
+  }, [isOpen, job]);
 
-  const checkRequirements = () => {
-    const newWarnings = [];
-    const newRequirementsMet = {
-      cgpa: true,
-      branch: true,
-      skills: true
-    };
+  const fetchLatestUserData = async () => {
+  try {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${baseURL}/api/students/profile`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (response.ok) {
+      const latestUser = await response.json();
+      setUser(latestUser);
+      // Check requirements with the fresh data
+      checkRequirementsWithUser(latestUser);
+    }
+  } catch (error) {
+    console.error('Failed to fetch latest user data:', error);
+  }
+};
+
+  const checkRequirementsWithUser = (currentUser) => {
+  if (!currentUser || !job) return;
+  
+  const newWarnings = [];
+  const newRequirementsMet = {
+    cgpa: true,
+    branch: true,
+    skills: true
+  };
+
+  console.log('🔍 Checking with user:', currentUser);
+    console.log('🔍 [JobApplyModal] Checking requirements:', {
+      userCGPA: currentUser.cgpa,
+      userBranch: currentUser.branch,
+      jobMinCgpa: job.minCgpa,
+      jobBranch: job.branch,
+      jobRequirements: job.jobRequirements
+    });
 
     if (job.jobRequirements) {
-      if (job.jobRequirements.minCgpa && user.cgpa < job.jobRequirements.minCgpa) {
+      if (job.jobRequirements.minCgpa && currentUser.cgpa < job.jobRequirements.minCgpa) {
         newRequirementsMet.cgpa = false;
-        newWarnings.push(`Your CGPA (${user.cgpa || 'N/A'}) is below the required minimum (${job.jobRequirements.minCgpa})`);
+        newWarnings.push(`Your CGPA (${currentUser.cgpa || 'N/A'}) is below the required minimum (${job.jobRequirements.minCgpa})`);
       }
 
       if (job.jobRequirements.allowedBranches && job.jobRequirements.allowedBranches.length > 0) {
-        if (!job.jobRequirements.allowedBranches.includes(user.branch)) {
+        if (!job.jobRequirements.allowedBranches.includes(currentUser.branch)) {
           newRequirementsMet.branch = false;
-          newWarnings.push(`Your branch (${user.branch || 'N/A'}) is not in the allowed branches: ${job.jobRequirements.allowedBranches.join(', ')}`);
+          newWarnings.push(`Your branch (${currentUser.branch || 'N/A'}) is not in the allowed branches: ${job.jobRequirements.allowedBranches.join(', ')}`);
         }
       }
     } else {
-      if (job.minCgpa && user.cgpa < job.minCgpa) {
+      if (job.minCgpa && currentUser.cgpa < job.minCgpa) {
         newRequirementsMet.cgpa = false;
-        newWarnings.push(`Your CGPA (${user.cgpa || 'N/A'}) is below the required minimum (${job.minCgpa})`);
+        newWarnings.push(`Your CGPA (${currentUser.cgpa || 'N/A'}) is below the required minimum (${job.minCgpa})`);
       }
 
-      if (job.branch && user.branch !== job.branch) {
+      if (job.branch && currentUser.branch !== job.branch) {
         newRequirementsMet.branch = false;
-        newWarnings.push(`Your branch (${user.branch || 'N/A'}) doesn't match the required branch (${job.branch})`);
+        newWarnings.push(`Your branch (${currentUser.branch || 'N/A'}) doesn't match the required branch (${job.branch})`);
       }
     }
+
+    console.log('🔍 [JobApplyModal] Requirements check result:', {
+      requirementsMet: newRequirementsMet,
+      warnings: newWarnings
+    });
 
     setRequirementsMet(newRequirementsMet);
     setWarnings(newWarnings);
   };
+
+  // ... rest of the component remains the same
 
   const updateCustomAnswer = (question, answer) => {
     setCustomAnswers(prev => ({
