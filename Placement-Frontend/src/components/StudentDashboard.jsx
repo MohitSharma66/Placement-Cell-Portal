@@ -694,45 +694,89 @@ const StudentDashboard = () => {
               </div>
             ) : (
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {(selectedResumeForJobs ? filteredJobs : jobs).map((job) => (
-                  <div key={job._id} className="card hover:shadow-md transition-shadow">
-                    <h3 className="font-bold text-lg text-gray-800 mb-1">{job.title}</h3>
-                    <p className="text-sm text-gray-500 mb-1">Company: {job.recruiterId?.company || 'N/A'}</p>
-                    <p className="text-sm text-gray-500 mb-1">Min CGPA: {job.minCgpa || 'N/A'}</p>
-                    <p className="text-sm text-gray-500 mb-1">Branch: {job.branch || 'Any'}</p>
-                    {job.suitableRoles && job.suitableRoles.length > 0 && (
-                      <p className="text-sm text-primary mb-1">
-                        Suitable for: {job.suitableRoles.join(', ')}
-                      </p>
-                    )}
-                    
-                    {job.jobRequirements && (
-                      <div className="mt-2 p-2 bg-gray-50 rounded text-xs">
-                        <p className="font-medium">Requirements:</p>
-                        {job.jobRequirements.skills && job.jobRequirements.skills.length > 0 && (
-                          <p>Skills: {job.jobRequirements.skills.join(', ')}</p>
-                        )}
-                        {job.jobRequirements.minCgpa && (
-                          <p>Min CGPA: {job.jobRequirements.minCgpa}</p>
-                        )}
-                        {job.jobRequirements.minExperienceYears && (
-                          <p>Experience: {job.jobRequirements.minExperienceYears} years</p>
-                        )}
-                      </div>
-                    )}
-                    
-                    <p className="text-sm text-gray-500">Posted: {new Date(job.postedAt).toLocaleDateString()}</p>
-                    <div className="mt-4">
-                      <button
-                        onClick={() => handleApplyClick(job._id)}
-                        className="btn-primary"
-                      >
-                        Apply Now
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+  {(selectedResumeForJobs ? filteredJobs : jobs).map((job) => (
+    <div key={job._id} className="card hover:shadow-md transition-shadow">
+      <h3 className="font-bold text-lg text-gray-800 mb-1">{job.title}</h3>
+      <p className="text-sm text-gray-500 mb-1">Company: {job.recruiterId?.company || 'N/A'}</p>
+      
+      {/* Show CGPA requirement with validation indicator */}
+      <div className="flex items-center mb-1">
+        <span className="text-sm text-gray-500">Min CGPA: {job.minCgpa || 'N/A'}</span>
+        {job.minCgpa && profile.cgpa && (
+          <span className={`ml-2 text-xs px-2 py-0.5 rounded ${parseFloat(profile.cgpa) >= job.minCgpa ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+            {parseFloat(profile.cgpa) >= job.minCgpa ? '✅ Eligible' : '❌ Not eligible'}
+          </span>
+        )}
+      </div>
+      
+      {/* Show branch requirement with validation indicator */}
+      <div className="flex items-center mb-1">
+        <span className="text-sm text-gray-500">Branch: {job.branch || 'Any'}</span>
+        {job.branch && job.branch.toLowerCase() !== 'any' && profile.branch && (
+          <span className={`ml-2 text-xs px-2 py-0.5 rounded ${job.branch.toLowerCase().includes(profile.branch.toLowerCase()) ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+            {job.branch.toLowerCase().includes(profile.branch.toLowerCase()) ? '✅ Eligible' : '❌ Not eligible'}
+          </span>
+        )}
+      </div>
+      
+      {job.suitableRoles && job.suitableRoles.length > 0 && (
+        <p className="text-sm text-primary mb-1">
+          Suitable for: {job.suitableRoles.join(', ')}
+        </p>
+      )}
+      
+      {job.jobRequirements && (
+        <div className="mt-2 p-2 bg-gray-50 rounded text-xs">
+          <p className="font-medium">Requirements:</p>
+          {job.jobRequirements.skills && job.jobRequirements.skills.length > 0 && (
+            <p>Skills: {job.jobRequirements.skills.join(', ')}</p>
+          )}
+          {job.jobRequirements.minCgpa && (
+            <p>Min CGPA: {job.jobRequirements.minCgpa}</p>
+          )}
+          {job.jobRequirements.minExperienceYears && (
+            <p>Experience: {job.jobRequirements.minExperienceYears} years</p>
+          )}
+        </div>
+      )}
+      
+      <p className="text-sm text-gray-500">Posted: {new Date(job.postedAt).toLocaleDateString()}</p>
+      
+      {/* Apply button with eligibility check */}
+      <div className="mt-4">
+        <button
+          onClick={() => handleApplyClick(job._id)}
+          className={`btn-primary ${(
+            (job.minCgpa && profile.cgpa && parseFloat(profile.cgpa) < job.minCgpa) ||
+            (job.branch && job.branch.toLowerCase() !== 'any' && profile.branch && !job.branch.toLowerCase().includes(profile.branch.toLowerCase()))
+          ) ? 'opacity-75 cursor-not-allowed' : ''}`}
+          disabled={
+            (job.minCgpa && profile.cgpa && parseFloat(profile.cgpa) < job.minCgpa) ||
+            (job.branch && job.branch.toLowerCase() !== 'any' && profile.branch && !job.branch.toLowerCase().includes(profile.branch.toLowerCase()))
+          }
+        >
+          {(job.minCgpa && profile.cgpa && parseFloat(profile.cgpa) < job.minCgpa) ||
+           (job.branch && job.branch.toLowerCase() !== 'any' && profile.branch && !job.branch.toLowerCase().includes(profile.branch.toLowerCase()))
+            ? 'Not Eligible'
+            : 'Apply Now'}
+        </button>
+        
+        {/* Show reason if not eligible */}
+        {(job.minCgpa && profile.cgpa && parseFloat(profile.cgpa) < job.minCgpa) && (
+          <p className="text-xs text-red-600 mt-1">
+            Your CGPA ({profile.cgpa}) is below required ({job.minCgpa})
+          </p>
+        )}
+        
+        {(job.branch && job.branch.toLowerCase() !== 'any' && profile.branch && !job.branch.toLowerCase().includes(profile.branch.toLowerCase())) && (
+          <p className="text-xs text-red-600 mt-1">
+            Your branch ({profile.branch}) is not eligible for this position
+          </p>
+        )}
+      </div>
+    </div>
+  ))}
+</div>
             )}
           </section>
         );

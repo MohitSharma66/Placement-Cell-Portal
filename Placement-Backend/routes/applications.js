@@ -12,40 +12,64 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 // Helper function to filter jobs based on resume analysis
-async function getMatchingJobs(resumeId, allJobs) {
+async function getMatchingJobs(resumeId, student, allJobs) {
   try {
+    // First filter jobs based on student eligibility (CGPA, branch)
+    const eligibleJobs = allJobs.filter(job => {
+      if (job.minCgpa && student.cgpa < job.minCgpa) return false;
+      if (job.branch && job.branch !== 'Any' && student.branch !== job.branch) return false;
+      return true;
+    });
+
+    // If no eligible jobs, return empty array
+    if (eligibleJobs.length === 0) {
+      return [];
+    }
+
     // Try to get analysis from database first (stored in resume)
     const resume = await Resume.findById(resumeId);
     
     if (resume && resume.skillAnalysis && resume.skillAnalysis.bestRoles) {
       const bestRoles = resume.skillAnalysis.bestRoles;
       
-      return allJobs.filter(job => 
+      // Filter eligible jobs based on role matching
+      const matchingJobs = eligibleJobs.filter(job => 
         job.suitableRoles && job.suitableRoles.some(role => 
           bestRoles.includes(role)
         )
       );
+      
+      // Return matching jobs if any, otherwise return eligible jobs as fallback
+      return matchingJobs.length > 0 ? matchingJobs : eligibleJobs;
     }
     
     // If no analysis in database, try to get from storage
     const analysis = await getAnalysisFromDrive(resumeId);
     
     if (analysis && analysis.bestRoles) {
-      return allJobs.filter(job => 
+      // Filter eligible jobs based on role matching
+      const matchingJobs = eligibleJobs.filter(job => 
         job.suitableRoles && job.suitableRoles.some(role => 
           analysis.bestRoles.includes(role)
         )
       );
+      
+      // Return matching jobs if any, otherwise return eligible jobs as fallback
+      return matchingJobs.length > 0 ? matchingJobs : eligibleJobs;
     }
     
-    // If no analysis available, return all jobs (fallback)
-    console.log(`No analysis found for resume ${resumeId}, showing all jobs`);
-    return allJobs;
+    // If no analysis available, return eligible jobs (fallback)
+    console.log(`No analysis found for resume ${resumeId}, showing all eligible jobs`);
+    return eligibleJobs;
     
   } catch (error) {
     console.error('Error in job matching:', error);
-    // On error, return all jobs as fallback
-    return allJobs;
+    // On error, return empty array or optionally apply basic eligibility filtering
+    return allJobs.filter(job => {
+      if (job.minCgpa && student.cgpa < job.minCgpa) return false;
+      if (job.branch && job.branch !== 'Any' && student.branch !== job.branch) return false;
+      return true;
+    });
   }
 }
 
@@ -59,12 +83,12 @@ router.get('/jobs/:resumeId', authMiddleware.auth, async (req, res) => {
     if (!resume || resume.studentId.toString() !== req.user.id) {
       return res.status(404).json({ msg: 'Resume not found or not authorized' });
     }
-
+    const student = await User.findById(req.user.id);
     // Get all jobs
     const allJobs = await Job.find().populate('recruiterId', 'company name').sort({ postedAt: -1 });
     
     // Filter jobs based on resume analysis
-    const matchingJobs = await getMatchingJobs(req.params.resumeId, allJobs);
+    const matchingJobs = await getMatchingJobs(req.params.resumeId, student, allJobs);
     
     res.json({
       jobs: matchingJobs,
@@ -100,6 +124,29 @@ router.post('/', authMiddleware.auth, async (req, res) => {
     if (!resume || resume.studentId.toString() !== req.user.id) {
       return res.status(404).json({ msg: 'Resume not found or not authorized' });
     }
+    
+    // ✅ START VALIDATION SECTION
+    const student = await User.findById(req.user.id);
+    
+    // Validate CGPA requirement
+    if (job.minCgpa && (!student.cgpa || student.cgpa < job.minCgpa)) {
+      return res.status(400).json({ 
+        msg: `Minimum CGPA required: ${job.minCgpa}. Your CGPA: ${student.cgpa || 'Not specified'}` 
+      });
+    }
+
+    // Validate branch requirement
+    if (job.branch && job.branch.trim() !== '' && job.branch.toLowerCase() !== 'any') {
+      const jobBranches = job.branch.split(',').map(b => b.trim().toLowerCase());
+      const studentBranch = student.branch ? student.branch.trim().toLowerCase() : '';
+      
+      if (studentBranch && !jobBranches.includes(studentBranch)) {
+        return res.status(400).json({ 
+          msg: `This job is only for ${job.branch} branch students. Your branch: ${student.branch || 'Not specified'}` 
+        });
+      }
+    }
+    // ✅ END VALIDATION SECTION
 
     // Validate required custom questions
     if (job.customQuestions && job.customQuestions.length > 0) {
