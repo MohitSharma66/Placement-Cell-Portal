@@ -355,7 +355,7 @@ const RecruiterDashboard = () => {
 </div>
 
           <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Allowed Branches (Comma-separated)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Allowed Branch</label>
             <input
               type="text"
               value={newJob.jobRequirements.allowedBranches.join(', ')}
@@ -366,7 +366,7 @@ const RecruiterDashboard = () => {
                   allowedBranches: e.target.value.split(',').map(b => b.trim()).filter(b => b)
                 }
               })}
-              placeholder="e.g., CSE, IT, ECE"
+              placeholder="e.g., CSE or DSAI or ECE"
               className="input"
             />
           </div>
