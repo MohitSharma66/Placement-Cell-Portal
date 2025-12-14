@@ -711,13 +711,26 @@ const StudentDashboard = () => {
       
       {/* Show branch requirement with validation indicator */}
       <div className="flex items-center mb-1">
-        <span className="text-sm text-gray-500">Branch: {job.branch || 'Any'}</span>
-        {job.branch && job.branch.toLowerCase() !== 'any' && profile.branch && (
-          <span className={`ml-2 text-xs px-2 py-0.5 rounded ${job.branch.toLowerCase().includes(profile.branch.toLowerCase()) ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-            {job.branch.toLowerCase().includes(profile.branch.toLowerCase()) ? '✅ Eligible' : '❌ Not eligible'}
-          </span>
-        )}
-      </div>
+  <span className="text-sm text-gray-500">Branch: {job.branch || 'Any'}</span>
+  
+  {/* Always show indicator if we have data */}
+  {profile.branch && (
+    <span className={`ml-2 text-xs px-2 py-0.5 rounded ${
+      // Green for: "Any" OR student branch matches
+      !job.branch || 
+      job.branch.toLowerCase() === 'any' ||
+      job.branch.toLowerCase().includes(profile.branch.toLowerCase())
+        ? 'bg-green-100 text-green-800' 
+        : 'bg-red-100 text-red-800'
+    }`}>
+      {!job.branch || 
+       job.branch.toLowerCase() === 'any' ||
+       job.branch.toLowerCase().includes(profile.branch.toLowerCase())
+        ? '✅ Eligible' 
+        : '❌ Not eligible'}
+    </span>
+  )}
+</div>
       
       {job.suitableRoles && job.suitableRoles.length > 0 && (
         <p className="text-sm text-primary mb-1">
