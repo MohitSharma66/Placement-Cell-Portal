@@ -77,11 +77,22 @@ const JobApplyModal = ({ job, isOpen, onClose, onApply, resumes }) => {
         newWarnings.push(`Your CGPA (${currentUser.cgpa || 'N/A'}) is below the required minimum (${job.minCgpa})`);
       }
 
-      if (job.branch && currentUser.branch !== job.branch) {
-        newRequirementsMet.branch = false;
-        newWarnings.push(`Your branch (${currentUser.branch || 'N/A'}) doesn't match the required branch (${job.branch})`);
-      }
+      // Replace lines 80-86 with:
+if (job.branch) {
+  const jobBranchLower = job.branch.toLowerCase().trim();
+  
+  // If branch is "any", skip check
+  if (jobBranchLower !== 'any') {
+    // Handle comma-separated branches
+    const jobBranches = job.branch.split(',').map(b => b.trim().toLowerCase());
+    const studentBranch = currentUser.branch ? currentUser.branch.toLowerCase().trim() : '';
+    
+    if (studentBranch && !jobBranches.includes(studentBranch)) {
+      newRequirementsMet.branch = false;
+      newWarnings.push(`Your branch (${currentUser.branch || 'N/A'}) doesn't match the required branch (${job.branch})`);
     }
+  }
+}
 
     console.log('🔍 [JobApplyModal] Requirements check result:', {
       requirementsMet: newRequirementsMet,
