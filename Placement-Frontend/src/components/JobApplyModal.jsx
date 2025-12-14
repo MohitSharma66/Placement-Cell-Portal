@@ -76,8 +76,7 @@ const JobApplyModal = ({ job, isOpen, onClose, onApply, resumes }) => {
         newRequirementsMet.cgpa = false;
         newWarnings.push(`Your CGPA (${currentUser.cgpa || 'N/A'}) is below the required minimum (${job.minCgpa})`);
       }
-
-      // Replace lines 80-86 with:
+// Replace lines 80-86 with:
 if (job.branch) {
   const jobBranchLower = job.branch.toLowerCase().trim();
   
@@ -93,6 +92,7 @@ if (job.branch) {
     }
   }
 }
+    }
 
     console.log('🔍 [JobApplyModal] Requirements check result:', {
       requirementsMet: newRequirementsMet,
