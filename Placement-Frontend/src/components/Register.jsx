@@ -28,7 +28,7 @@ const Register = () => {
         if (role === 'student') {
           setEmailWarning(`⚠️ Students must use @${COLLEGE_DOMAIN} email`);
         } else if (role === 'recruiter') {
-          setEmailWarning(`⚠️ Recruiters must use @${COLLEGE_DOMAIN} email`);
+          setEmailWarning(`⚠️ Placement-Cell must use @${COLLEGE_DOMAIN} email`);
         }
       } else {
         setEmailWarning('');
@@ -121,12 +121,12 @@ const Register = () => {
                 className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
               >
                 <option value="student">Student</option>
-                <option value="recruiter">Recruiter</option>
+                <option value="recruiter">Placement-Cell</option>
               </select>
               <p className="mt-2 text-xs text-gray-500">
                 {role === 'student' 
                   ? `Students: Use your official @${COLLEGE_DOMAIN} email`
-                  : `Recruiters: Must be approved by placement cell to register`
+                  : `Placement-Cell: Must be approved by placement cell to register`
                 }
               </p>
             </div>
@@ -195,7 +195,6 @@ const Register = () => {
               <ul className="text-xs text-blue-700 space-y-1">
                 <li>• Only <strong>@{COLLEGE_DOMAIN}</strong> emails can register</li>
                 <li>• Students: Use your official college email address</li>
-                <li>• Recruiters: Must contact placement cell for approval</li>
                 <li>• Your name should match college records</li>
               </ul>
             </div>

@@ -82,7 +82,7 @@ const RecruiterSidebar = ({ activeSection, setActiveSection, isSidebarOpen, setI
               <div className="w-10 h-10 rounded-lg bg-purple-600 flex items-center justify-center">
                 <span className="text-white font-bold">R</span>
               </div>
-              <h2 className="text-gray-800 font-semibold text-lg">Recruiter</h2>
+              <h2 className="text-gray-800 font-semibold text-lg">Placement-Cell</h2>
             </div>
 
             <button

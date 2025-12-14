@@ -27,7 +27,7 @@ const Login = () => {
         if (role === 'student') {
           setEmailWarning(`⚠️ Students must use @${COLLEGE_DOMAIN} email`);
         } else if (role === 'recruiter') {
-          setEmailWarning(`⚠️ Recruiters must use @${COLLEGE_DOMAIN} email`);
+          setEmailWarning(`⚠️ Placement-Cell must use @${COLLEGE_DOMAIN} email`);
         }
       } else {
         setEmailWarning('');
@@ -108,12 +108,12 @@ const Login = () => {
                 className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
               >
                 <option value="student">Student</option>
-                <option value="recruiter">Recruiter</option>
+                <option value="recruiter">Placement-Cell</option>
               </select>
               <p className="mt-2 text-xs text-gray-500">
                 {role === 'student' 
                   ? `Students: Use your @${COLLEGE_DOMAIN} email`
-                  : `Recruiters: Use your @${COLLEGE_DOMAIN} email (placement cell approved)`
+                  : `Placement-Cell: Use your @${COLLEGE_DOMAIN} email (placement cell approved)`
                 }
               </p>
             </div>
@@ -163,7 +163,7 @@ const Login = () => {
               </h4>
               <p className="text-xs text-blue-700">
                 This portal is restricted to <strong>@{COLLEGE_DOMAIN}</strong> emails only.
-                {role === 'recruiter' && ' Recruiters must be approved by the placement cell.'}
+                {role === 'recruiter' && 'Must be approved.'}
               </p>
             </div>
 
