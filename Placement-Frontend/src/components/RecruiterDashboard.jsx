@@ -618,7 +618,7 @@ const RecruiterDashboard = () => {
             <h2 className="text-xl font-semibold mb-4 text-gray-800">Update Profile</h2>
             <form onSubmit={updateProfile} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Member Name</label>
                 <input
                   type="text"
                   value={profile.company}

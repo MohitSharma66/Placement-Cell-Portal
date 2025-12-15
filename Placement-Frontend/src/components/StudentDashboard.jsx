@@ -697,7 +697,7 @@ const StudentDashboard = () => {
   {(selectedResumeForJobs ? filteredJobs : jobs).map((job) => (
     <div key={job._id} className="card hover:shadow-md transition-shadow">
       <h3 className="font-bold text-lg text-gray-800 mb-1">{job.title}</h3>
-      <p className="text-sm text-gray-500 mb-1">Company: {job.recruiterId?.company || 'N/A'}</p>
+      <p className="text-sm text-gray-500 mb-1">Posted By: {job.recruiterId?.company || 'N/A'}</p>
       
       {/* Show CGPA requirement with validation indicator */}
       <div className="flex items-center mb-1">
