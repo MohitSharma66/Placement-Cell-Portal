@@ -206,7 +206,7 @@ const PlacementStatistics = () => {
                                 <tr>
                                     <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Student Name</th>
                                     <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Role</th>
-                                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Company</th>
+                                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Posted By:</th>
                                     <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Branch</th>
                                 </tr>
                             </thead>
@@ -217,7 +217,7 @@ const PlacementStatistics = () => {
                                             {placement.studentName}
                                         </td>
                                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-800">{placement.role}</td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-800">{placement.company}</td>
+                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-800">{placement.PostedBy}</td>
                                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-800">
                                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                                                 {placement.branch}

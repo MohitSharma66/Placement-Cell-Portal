@@ -16,7 +16,7 @@ router.get('/placements/stats', auth, async (req, res) => {
         // Fetch data from your placements sheet
         const sheetData = await getSheetData(
             process.env.GOOGLE_SHEET_ID,
-            'Sheet2!A:N' // Read all columns from A to N
+            'Sheet3!A:N' // Read all columns from A to N
         );
 
         console.log(`📄 Raw sheet data received: ${sheetData.length} rows`);
@@ -83,7 +83,7 @@ function processPlacementData(sheetData) {
       statsByYear[academicYear].placements.push({
         studentName: row[1] || 'Unknown',
         role: row[3] || 'Unknown',        // Job Title
-        company: row[2] || 'Unknown',
+        PostedBy: row[2] || 'Unknown',
         branch: branch,
         academicYear: academicYear
       });
