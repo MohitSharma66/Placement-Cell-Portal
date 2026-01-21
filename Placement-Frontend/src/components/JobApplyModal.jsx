@@ -12,7 +12,7 @@ const JobApplyModal = ({ job, isOpen, onClose, onApply, resumes }) => {
     skills: true
   });
   const [warnings, setWarnings] = useState([]);
-  const baseURL = window.location.hostname === '172.16.61.184' ? '' : 'http://localhost:5000';
+  const baseURL = window.location.hostname === 'placement.iiitnr.edu.in' ? '' : 'http://localhost:5000';
   useEffect(() => {
     if (isOpen && job) {
       fetchLatestUserData();

@@ -3,7 +3,7 @@ import * as jwtDecode from 'jwt-decode';
 import { createContext, useContext, useEffect, useState } from 'react';
 
 const AuthContext = createContext();
-const baseURL = window.location.hostname === '172.16.61.184' ? '' : 'http://localhost:5000';
+const baseURL = window.location.hostname === 'placement.iiitnr.edu.in' ? '' : 'http://localhost:5000';
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
