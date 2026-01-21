@@ -39,7 +39,28 @@ const RecruiterDashboard = () => {
     fetchJobs();
   }, []);
 
-  const baseURL = window.location.hostname === 'placement.iiitnr.edu.in' ? '' : 'http://localhost:5000';
+  // Dynamically determine baseURL based on current host
+const getBaseURL = () => {
+  const hostname = window.location.hostname;
+  const protocol = window.location.protocol;
+  
+  // If we're on the production server (domain or IP)
+  if (hostname === 'placement.iiitnr.edu.in' ||
+      hostname === 'www.placement.iiitnr.edu.in' ||
+      hostname === '172.16.61.184') {
+    return ''; // Use relative URLs (same origin)
+  }
+  
+  // If we're on localhost
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'http://localhost:5000'; // Local development
+  }
+  
+  // Default fallback (for any other scenario)
+  return `${protocol}//${hostname}`;
+};
+
+const baseURL = getBaseURL();
 
   const updateProfile = async (e) => {
     e.preventDefault();
