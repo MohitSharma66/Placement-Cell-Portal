@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import JobApplyModal from './JobApplyModal';
 import Navbar from './Navbar';
+import PlacementStatistics from './PlacementStatistics'; // Add this import
 import StudentSidebar from './StudentSidebar';
 
 // Dynamically determine baseURL based on current host
@@ -865,6 +866,8 @@ const StudentDashboard = () => {
             )}
           </section>
         );
+      case 'statistics': // Add this new case
+        return <PlacementStatistics />;
       default:
         return null;
     }

@@ -13,7 +13,7 @@ const authClient = new google.auth.GoogleAuth({
 // Add this function to read sheet data for statistics
 async function getSheetData(sheetId, range) {
   try {
-    const sheets = await getSheets(); // This now works
+    const sheets = await getSheets();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
       range: range,
@@ -33,7 +33,7 @@ async function getSheets() {
 async function initializeSheet() {
   const sheets = await getSheets();
   const sheetId = process.env.GOOGLE_SHEET_ID;
-  let sheetName = process.env.GOOGLE_SHEET_NAME;
+  let sheetName = process.env.GOOGLE_SHEET_NAME || 'Sheet3';
 
   console.log('📊 [DEBUG] Initializing sheet with:', {
     sheetId: sheetId,
@@ -55,73 +55,90 @@ async function initializeSheet() {
 
   // Log all existing sheets for debugging
   console.log('📋 [DEBUG] Existing sheets in document:');
+  let sheetFound = null;
   spreadsheet.data.sheets.forEach((s, i) => {
-    console.log(`   ${i + 1}. "${s.properties.title}" (index: ${s.properties.index})`);
+    const sheetInfo = `   ${i + 1}. "${s.properties.title}" (index: ${s.properties.index}, sheetId: ${s.properties.sheetId})`;
+    console.log(sheetInfo);
+    
+    // Check if this sheet matches our target name
+    if (s.properties.title === sheetName) {
+      sheetFound = s;
+      console.log(`   ✅ This is our target sheet!`);
+    }
   });
 
-  // Check if sheet with exact name exists
-  let sheet = spreadsheet.data.sheets.find(s => 
-    s.properties.title.toLowerCase() === sheetName.toLowerCase()
-  );
+  // Use the sheet we found, or try to find it by case-insensitive match
+  let sheet = sheetFound;
   
   if (!sheet) {
-    console.log(`📝 [DEBUG] Sheet "${sheetName}" not found, creating it...`);
+    console.log(`📝 [DEBUG] Sheet "${sheetName}" not found with exact match, trying case-insensitive...`);
     
-    try {
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: sheetId,
-        requestBody: {
-          requests: [{ 
-            addSheet: { 
-              properties: { 
-                title: sheetName,
-                gridProperties: {
-                  rowCount: 1000,
-                  columnCount: 20
-                }
+    // Try case-insensitive match
+    sheet = spreadsheet.data.sheets.find(s => 
+      s.properties.title.toLowerCase() === sheetName.toLowerCase()
+    );
+    
+    if (sheet) {
+      console.log(`✅ [DEBUG] Found sheet with case-insensitive match: "${sheet.properties.title}"`);
+      sheetName = sheet.properties.title; // Update to actual name
+    }
+  }
+  
+  if (!sheet) {
+    console.log(`📝 [DEBUG] Sheet "${sheetName}" not found, checking for sheets with "Sheet" in name...`);
+    
+    // Try to find any sheet that might be Sheet1, Sheet2, etc.
+    const possibleSheet = spreadsheet.data.sheets.find(s => 
+      s.properties.title.toLowerCase().includes('sheet')
+    );
+    
+    if (possibleSheet) {
+      console.log(`🔄 [DEBUG] Using existing sheet: "${possibleSheet.properties.title}" instead of creating new one`);
+      sheetName = possibleSheet.properties.title;
+      sheet = possibleSheet;
+    } else {
+      console.log(`📝 [DEBUG] Creating new sheet "${sheetName}"...`);
+      
+      try {
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: sheetId,
+          requestBody: {
+            requests: [{ 
+              addSheet: { 
+                properties: { 
+                  title: sheetName,
+                  gridProperties: {
+                    rowCount: 1000,
+                    columnCount: 20
+                  }
+                } 
               } 
-            } 
-          }],
-        },
-      });
-      
-      console.log(`✅ [DEBUG] Created new sheet: "${sheetName}"`);
-      
-      // Refresh spreadsheet data
-      spreadsheet = await sheets.spreadsheets.get({
-        spreadsheetId: sheetId,
-      });
-      
-      sheet = spreadsheet.data.sheets.find(s => 
-        s.properties.title.toLowerCase() === sheetName.toLowerCase()
-      );
-      
-      if (!sheet) {
-        throw new Error(`Failed to create sheet "${sheetName}"`);
-      }
-      
-    } catch (createErr) {
-      console.error('❌ [DEBUG] Error creating sheet:', createErr.message);
-      
-      // If creation fails, check if we should use an existing sheet
-      if (sheetName.toLowerCase() === 'sheet3') {
-        // Try to find Sheet3 (case insensitive)
+            }],
+          },
+        });
+        
+        console.log(`✅ [DEBUG] Created new sheet: "${sheetName}"`);
+        
+        // Refresh spreadsheet data
+        spreadsheet = await sheets.spreadsheets.get({
+          spreadsheetId: sheetId,
+        });
+        
         sheet = spreadsheet.data.sheets.find(s => 
-          s.properties.title.toLowerCase().includes('sheet3')
+          s.properties.title === sheetName
         );
         
-        if (sheet) {
-          console.log(`🔄 [DEBUG] Using existing sheet: "${sheet.properties.title}"`);
-          sheetName = sheet.properties.title; // Update sheetName to match actual title
+        if (!sheet) {
+          throw new Error(`Failed to create sheet "${sheetName}"`);
         }
-      }
-      
-      if (!sheet) {
+        
+      } catch (createErr) {
+        console.error('❌ [DEBUG] Error creating sheet:', createErr.message);
         throw createErr;
       }
     }
   } else {
-    console.log(`✅ [DEBUG] Found existing sheet: "${sheet.properties.title}"`);
+    console.log(`✅ [DEBUG] Using existing sheet: "${sheet.properties.title}" (sheetId: ${sheet.properties.sheetId})`);
   }
 
   // UPDATED HEADERS - with "Posted By:" instead of "Company"
@@ -172,7 +189,7 @@ async function initializeSheet() {
         console.log('📋 [DEBUG] Expected headers:', headers);
         console.log('📋 [DEBUG] Actual headers:', existingHeaders);
         
-        // Optional: Update headers if they don't match
+        // Ask if we should update headers (in production you might want to auto-update)
         console.log('🔄 [DEBUG] Updating headers to new format...');
         await sheets.spreadsheets.values.update({
           spreadsheetId: sheetId,
@@ -181,6 +198,8 @@ async function initializeSheet() {
           resource: { values: [headers] },
         });
         console.log('✅ [DEBUG] Headers updated successfully');
+      } else {
+        console.log('✅ [DEBUG] Headers match expected format');
       }
     }
   } catch (getErr) {
@@ -218,11 +237,11 @@ function checkHeadersMatch(existingHeaders, expectedHeaders) {
     
     // Special handling for column C (index 2)
     if (i === 2) {
-      // Accept "posted by:" or "company" as equivalent
-      if (expected.includes('posted by') && existing.includes('company')) {
-        continue; // Accept this as a match
-      }
-      if (existing.includes('posted by') && expected.includes('company')) {
+      // Accept "posted by:", "company", or similar as equivalent
+      if ((expected.includes('posted by') && existing.includes('company')) ||
+          (existing.includes('posted by') && expected.includes('company')) ||
+          (expected.includes('posted by') && existing.includes('posted by')) ||
+          (expected.includes('company') && existing.includes('company'))) {
         continue; // Accept this as a match
       }
     }
@@ -281,10 +300,10 @@ async function addApplicationToSheet(
       academicYear,                // Column G
       status,                      // Column H
       resumeLink || '',            // Column I
-      tenthScore,                  // Column J
-      twelfthScore,                // Column K
-      cgpa,                        // Column L
-      branch,                      // Column M
+      tenthScore || '',            // Column J
+      twelfthScore || '',          // Column K
+      cgpa || '',                  // Column L
+      branch || '',                // Column M
       customQnA || 'None'          // Column N
     ]];
     
@@ -311,8 +330,7 @@ async function addApplicationToSheet(
   }
 }
 
-// FIXED FUNCTION - Use appliedAt timestamp to find the row (like the old working version)
-// FIXED FUNCTION - Correct indexing
+// FIXED FUNCTION - Use appliedAt timestamp to find the row
 async function updateApplicationStatusInSheet(appliedAtTimestamp, status) {
   try {
     const { sheetId, sheetName } = await initializeSheet();
@@ -338,12 +356,11 @@ async function updateApplicationStatusInSheet(appliedAtTimestamp, status) {
       if (index === 0) return false; // Skip header row
       
       const rowAppliedAt = row[5]; // Column F - Applied At (index 5)
-      console.log(`📊 [DEBUG] Row ${index}: Applied At = "${rowAppliedAt}"`);
       
       // Check if Applied At matches
       const match = rowAppliedAt === appliedAtTimestamp;
       if (match) {
-        console.log(`✅ [DEBUG] Found matching application at JavaScript array index ${index}`);
+        console.log(`✅ [DEBUG] Found matching application at row ${index}`);
       }
       return match;
     });

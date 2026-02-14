@@ -67,7 +67,8 @@ const Register = () => {
     }
 
     setIsLoading(true);
-    const { success, user, msg } = await register(email, password, role, name);
+    // Trim the name when submitting, but allow spaces during typing
+    const { success, user, msg } = await register(email, password, role, name.trim());
     
     if (success) {
       setTimeout(() => {
@@ -117,7 +118,7 @@ const Register = () => {
               </label>
               <select 
                 value={role} 
-                onChange={(e) => setRole(e.target.value)} 
+                onChange={(e) => setRole(e.target.value)}
                 className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
               >
                 <option value="student">Student</option>
@@ -131,7 +132,7 @@ const Register = () => {
               </p>
             </div>
 
-            {/* Name Input */}
+            {/* Name Input - FIXED: Removed .trim() from onChange */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Full Name
@@ -139,14 +140,14 @@ const Register = () => {
               <input
                 type="text"
                 value={name}
-                onChange={(e) => setName(e.target.value.trim())}
+                onChange={(e) => setName(e.target.value)} // Removed .trim() to allow spaces
                 placeholder={role === 'student' ? "Your name as per college records" : "Company representative name"}
                 className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 required
               />
             </div>
 
-            {/* Email Input */}
+            {/* Email Input - FIXED: Removed .trim() from onChange */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 College Email Address
@@ -154,7 +155,7 @@ const Register = () => {
               <input
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value.trim())}
+                onChange={(e) => setEmail(e.target.value)} // Removed .trim() to allow proper email input
                 placeholder={`name@${COLLEGE_DOMAIN}`}
                 className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
                   emailWarning ? 'border-amber-300 bg-amber-50' : 'border-gray-300 bg-white'

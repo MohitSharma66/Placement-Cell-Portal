@@ -1,5 +1,4 @@
 // StudentSidebar.jsx
-import React from 'react';
 
 const MenuItem = ({ id, label, icon, active, onClick }) => (
   <button
@@ -45,6 +44,11 @@ export default function StudentSidebar({
         <rect x="3" y="3" width="18" height="18" rx="2" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     ),
+    statistics: ( // Add this new icon for statistics
+      <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <path d="M3 20h18M6 4v16M12 8v12M18 12v8" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    ),
     hamburger: (
       <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8">
         <path d="M3 7h18M3 12h18M3 17h18" strokeLinecap="round" strokeLinejoin="round"/>
@@ -67,6 +71,7 @@ export default function StudentSidebar({
     { id: 'profile', label: 'Profile', icon: icons.profile },
     { id: 'resume', label: 'Resumes', icon: icons.resume },
     { id: 'applications', label: 'Applications', icon: icons.applications },
+    { id: 'statistics', label: 'Statistics', icon: icons.statistics }, // Add this line
   ];
 
   return (
