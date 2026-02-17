@@ -302,19 +302,32 @@ const server = app.listen(PORT, HOST, () => {
 
 const gracefulShutdown = (signal) => {
   console.log(`\n${signal} received, shutting down gracefully...`);
+  console.log('🔍 DEBUG: Connection state before close:', mongoose.connection.readyState);
+  // 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
   
   server.close(() => {
-    console.log('HTTP server closed');
+    console.log('✅ HTTP server closed');
+    console.log('🔍 DEBUG: Connection state after server close:', mongoose.connection.readyState);
     
-    // Use promise-based close for newer Mongoose (no callback)
+    // Check if already disconnected
+    if (mongoose.connection.readyState === 0) {
+      console.log('⚠️ MongoDB already disconnected');
+      process.exit(0);
+      return;
+    }
+    
+    console.log('🔍 DEBUG: Attempting to close MongoDB connection...');
+    
+    // Use promise-based close for newer Mongoose
     mongoose.connection.close(false)
       .then(() => {
-        console.log('MongoDB connection closed');
+        console.log('✅ MongoDB connection closed successfully');
         console.log('✅ Process terminated gracefully');
         process.exit(0);
       })
       .catch((err) => {
         console.error('❌ Error closing MongoDB connection:', err);
+        console.log('🔍 DEBUG: Force exiting despite error');
         process.exit(1);
       });
   });
@@ -322,6 +335,7 @@ const gracefulShutdown = (signal) => {
   // Force shutdown after 10 seconds
   setTimeout(() => {
     console.error('❌ Could not close connections in time, forcefully shutting down');
+    console.log('🔍 DEBUG: Connection state at timeout:', mongoose.connection.readyState);
     process.exit(1);
   }, 10000);
 };
