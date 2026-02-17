@@ -84,7 +84,33 @@ app.use(cors({
 // Preflight requests handling
 app.options('*', cors());
 
-// Rate limiting
+// ========================
+// FIXED: RATE LIMITING FOR IPV6
+// ========================
+
+// Trust proxy - important when behind Nginx
+app.set('trust proxy', 1); // Trust first proxy
+
+// Helper function to normalize IP addresses
+const normalizeIp = (ip) => {
+  if (!ip) return 'unknown';
+  
+  // Remove IPv6 prefix if present (::ffff:192.168.1.1 -> 192.168.1.1)
+  if (ip.startsWith('::ffff:')) {
+    return ip.substring(7);
+  }
+  
+  // Handle IPv6 addresses - use first 4 segments for rate limiting
+  if (ip.includes(':')) {
+    const segments = ip.split(':');
+    // For IPv6, use the /64 subnet (first 4 segments)
+    return segments.slice(0, 4).join(':');
+  }
+  
+  return ip;
+};
+
+// Rate limiting with proper IPv6 support
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
@@ -95,8 +121,16 @@ const limiter = rateLimit({
   legacyHeaders: false,
   skipSuccessfulRequests: false,
   keyGenerator: (req) => {
-    // Use X-Forwarded-For header if behind proxy (like Nginx)
-    return req.headers['x-forwarded-for'] || req.ip;
+    // Get IP from X-Forwarded-For header (Nginx) first
+    const forwarded = req.headers['x-forwarded-for'];
+    let ip = forwarded ? forwarded.split(',')[0].trim() : req.ip || req.connection.remoteAddress;
+    
+    // Normalize the IP address
+    return normalizeIp(ip);
+  },
+  // Skip rate limiting for health checks
+  skip: (req) => {
+    return req.path === '/api/health';
   }
 });
 
@@ -123,7 +157,7 @@ app.use(hpp({
 
 // Request logging middleware
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.url} - Origin: ${req.headers.origin || 'none'}`);
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url} - Origin: ${req.headers.origin || 'none'} - IP: ${normalizeIp(req.ip || req.connection.remoteAddress)}`);
   next();
 });
 
@@ -136,7 +170,7 @@ const mongoOptions = {
   useUnifiedTopology: true,
   serverSelectionTimeoutMS: 5000,
   socketTimeoutMS: 45000,
-  family: 4
+  family: 4 // Force IPv4
 };
 
 mongoose.connect('mongodb://127.0.0.1:27017/placementdb', mongoOptions)
@@ -263,7 +297,7 @@ const server = app.listen(PORT, HOST, () => {
   🔒 Security Features Enabled:
   • Helmet (HTTP headers)
   • CORS (${allowedOrigins.length} allowed origins)
-  • Rate Limiting (100 req/15min)
+  • Rate Limiting (100 req/15min) - IPv6 Ready ✅
   • XSS Protection
   • NoSQL Injection Protection
   • Parameter Pollution Protection
