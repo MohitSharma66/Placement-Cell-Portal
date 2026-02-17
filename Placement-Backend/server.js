@@ -85,32 +85,30 @@ app.use(cors({
 app.options('*', cors());
 
 // ========================
-// FIXED: RATE LIMITING FOR IPV6
+// FIXED: RATE LIMITING FOR IPV6 - WORKING VERSION
 // ========================
 
 // Trust proxy - important when behind Nginx
-app.set('trust proxy', 1); // Trust first proxy
+app.set('trust proxy', 1);
 
-// Helper function to normalize IP addresses
-const normalizeIp = (ip) => {
-  if (!ip) return 'unknown';
-  
-  // Remove IPv6 prefix if present (::ffff:192.168.1.1 -> 192.168.1.1)
-  if (ip.startsWith('::ffff:')) {
-    return ip.substring(7);
+// Simple function to get a clean IP string
+const getClientIp = (req) => {
+  // Try X-Forwarded-For first (when behind Nginx)
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) {
+    // Take the first IP in the list and clean it
+    const ip = forwarded.split(',')[0].trim();
+    // Remove IPv6 prefix if present
+    return ip.replace(/^::ffff:/, '');
   }
   
-  // Handle IPv6 addresses - use first 4 segments for rate limiting
-  if (ip.includes(':')) {
-    const segments = ip.split(':');
-    // For IPv6, use the /64 subnet (first 4 segments)
-    return segments.slice(0, 4).join(':');
-  }
-  
-  return ip;
+  // Fallback to req.ip or remoteAddress
+  const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+  // Remove IPv6 prefix if present
+  return ip.replace(/^::ffff:/, '');
 };
 
-// Rate limiting with proper IPv6 support
+// Rate limiting with simple key generation
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
@@ -119,19 +117,12 @@ const limiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  skipSuccessfulRequests: false,
   keyGenerator: (req) => {
-    // Get IP from X-Forwarded-For header (Nginx) first
-    const forwarded = req.headers['x-forwarded-for'];
-    let ip = forwarded ? forwarded.split(',')[0].trim() : req.ip || req.connection.remoteAddress;
-    
-    // Normalize the IP address
-    return normalizeIp(ip);
+    // Return a simple string - no complex objects
+    return getClientIp(req);
   },
   // Skip rate limiting for health checks
-  skip: (req) => {
-    return req.path === '/api/health';
-  }
+  skip: (req) => req.path === '/api/health'
 });
 
 // Apply rate limiting to API routes
@@ -157,7 +148,7 @@ app.use(hpp({
 
 // Request logging middleware
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.url} - Origin: ${req.headers.origin || 'none'} - IP: ${normalizeIp(req.ip || req.connection.remoteAddress)}`);
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url} - IP: ${getClientIp(req)}`);
   next();
 });
 
@@ -297,7 +288,7 @@ const server = app.listen(PORT, HOST, () => {
   🔒 Security Features Enabled:
   • Helmet (HTTP headers)
   • CORS (${allowedOrigins.length} allowed origins)
-  • Rate Limiting (100 req/15min) - IPv6 Ready ✅
+  • Rate Limiting (100 req/15min) - FIXED ✅
   • XSS Protection
   • NoSQL Injection Protection
   • Parameter Pollution Protection
