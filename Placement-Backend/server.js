@@ -85,7 +85,7 @@ app.use(cors({
 app.options('*', cors());
 
 // ========================
-// FIXED: RATE LIMITING FOR IPV6 - WORKING VERSION
+// RATE LIMITING - FIXED FOR IPV6
 // ========================
 
 // Trust proxy - important when behind Nginx
@@ -297,7 +297,7 @@ const server = app.listen(PORT, HOST, () => {
 });
 
 // ========================
-// GRACEFUL SHUTDOWN
+// GRACEFUL SHUTDOWN - FIXED FOR NEWER MONGOOSE
 // ========================
 
 const gracefulShutdown = (signal) => {
@@ -305,11 +305,18 @@ const gracefulShutdown = (signal) => {
   
   server.close(() => {
     console.log('HTTP server closed');
-    mongoose.connection.close(false, () => {
-      console.log('MongoDB connection closed');
-      console.log('✅ Process terminated gracefully');
-      process.exit(0);
-    });
+    
+    // Use promise-based close for newer Mongoose (no callback)
+    mongoose.connection.close(false)
+      .then(() => {
+        console.log('MongoDB connection closed');
+        console.log('✅ Process terminated gracefully');
+        process.exit(0);
+      })
+      .catch((err) => {
+        console.error('❌ Error closing MongoDB connection:', err);
+        process.exit(1);
+      });
   });
 
   // Force shutdown after 10 seconds
